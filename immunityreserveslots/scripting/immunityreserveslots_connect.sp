@@ -123,9 +123,10 @@
 #undef REQUIRE_PLUGIN
 #include <donator>
 #include <entWatch>
+#include <GFLClanru>
 #define REQUIRE_PLUGIN
 
-#define PLUGIN_VERSION "2.0.9"
+#define PLUGIN_VERSION "2.1.0"
 
 // Toggle build here.
 #define EXT_CBASE 0
@@ -154,6 +155,7 @@ new bool:b_lateLoad;
 new bool:b_loaded;
 new bool:b_useDonator;
 new bool:b_useEntWatch;
+new bool:b_useGFLClanru;
 new bool:b_canKickSpec[MAXPLAYERS+1];
 
 new g_HIPCount;
@@ -212,62 +214,62 @@ public OnPluginStart()
 	#if EXT_CONNECT
 
 	Format(desc, sizeof(desc), "%t", "irs_autopassword");
-	cvar_AutoPassword = CreateConVar("sm_irs_autopassword", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 2.0);
+	cvar_AutoPassword = CreateConVar("sm_irs_autopassword", "0", desc, _, true, 0.0, true, 2.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_rejectreason_enable");
-	cvar_RejectReasonEnable = CreateConVar("sm_irs_rejectreason_enable", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	cvar_RejectReasonEnable = CreateConVar("sm_irs_rejectreason_enable", "0", desc, _, true, 0.0, true, 1.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_rejectreason");
-	cvar_RejectReason = CreateConVar("sm_irs_rejectreason", "default", desc, FCVAR_PLUGIN);
+	cvar_RejectReason = CreateConVar("sm_irs_rejectreason", "default", desc, _);
 
 	cvar_GameTypeMVM = FindConVar("tf_gamemode_mvm");
 
 	#endif
 
 	Format(desc, sizeof(desc), "%t", "irs_version");
-	CreateConVar("sm_irs_version", PLUGIN_VERSION, desc, FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	CreateConVar("sm_irs_version", PLUGIN_VERSION, desc, FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
 	Format(desc, sizeof(desc), "%t", "irs_kicktype");
-	cvar_KickType = CreateConVar("sm_irs_kicktype", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 3.0);
+	cvar_KickType = CreateConVar("sm_irs_kicktype", "0", desc, _, true, 0.0, true, 3.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_kickreason");
-	cvar_KickReason = CreateConVar("sm_irs_kickreason", "default", desc, FCVAR_PLUGIN);
+	cvar_KickReason = CreateConVar("sm_irs_kickreason", "default", desc, _);
 
 	Format(desc, sizeof(desc), "%t", "irs_kickreason_immunity");
-	cvar_KickReasonImmunity = CreateConVar("sm_irs_kickreason_immunity", "default", desc, FCVAR_PLUGIN);
+	cvar_KickReasonImmunity = CreateConVar("sm_irs_kickreason_immunity", "default", desc, _);
 
 	Format(desc, sizeof(desc), "%t", "irs_kicklist_file");
-	cvar_KickListFile = CreateConVar("sm_irs_kicklist_file", "default", desc, FCVAR_PLUGIN);
+	cvar_KickListFile = CreateConVar("sm_irs_kicklist_file", "default", desc, _);
 
 	Format(desc, sizeof(desc), "%t", "irs_kicklist_mode");
-	cvar_KickListMode = CreateConVar("sm_irs_kicklist_mode", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 2.0);
+	cvar_KickListMode = CreateConVar("sm_irs_kicklist_mode", "0", desc, _, true, 0.0, true, 2.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_log");
-	cvar_Logging = CreateConVar("sm_irs_log", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 2.0);
+	cvar_Logging = CreateConVar("sm_irs_log", "0", desc, _, true, 0.0, true, 2.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_immunity");
-	cvar_Immunity = CreateConVar("sm_irs_immunity", "1", desc, FCVAR_PLUGIN, true, 0.0, true, 2.0);
+	cvar_Immunity = CreateConVar("sm_irs_immunity", "1", desc, _, true, 0.0, true, 2.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_kickspecfirst");
-	cvar_Spec = CreateConVar("sm_irs_kickspecfirst", "1", desc, FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	cvar_Spec = CreateConVar("sm_irs_kickspecfirst", "1", desc, _, true, 0.0, true, 1.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_kickspecdelay");
-	cvar_SpecKickDelay = CreateConVar("sm_irs_kickspecdelay", "0", desc, FCVAR_PLUGIN, true, 0.0);
+	cvar_SpecKickDelay = CreateConVar("sm_irs_kickspecdelay", "0", desc, _, true, 0.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_donator_support");
-	cvar_Donator = CreateConVar("sm_irs_donator_support", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	cvar_Donator = CreateConVar("sm_irs_donator_support", "0", desc, _, true, 0.0, true, 1.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_donator_immunity");
-	cvar_DonatorImmunity = CreateConVar("sm_irs_donator_immunity", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 99.0);
+	cvar_DonatorImmunity = CreateConVar("sm_irs_donator_immunity", "0", desc, _, true, 0.0, true, 99.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_highimmunitylimit");
-	cvar_HighImmunityLimit = CreateConVar("sm_irs_highimmunitylimit", "0", desc, FCVAR_PLUGIN, true, 0.0);
+	cvar_HighImmunityLimit = CreateConVar("sm_irs_highimmunitylimit", "0", desc, _, true, 0.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_highimmunityvalue");
-	cvar_HighImmunityValue = CreateConVar("sm_irs_highimmunityvalue", "0", desc, FCVAR_PLUGIN, true, 0.0);
+	cvar_HighImmunityValue = CreateConVar("sm_irs_highimmunityvalue", "0", desc, _, true, 0.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_keepbalance");
-	cvar_KeepBalance = CreateConVar("sm_irs_keepbalance", "0", desc, FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	cvar_KeepBalance = CreateConVar("sm_irs_keepbalance", "0", desc, _, true, 0.0, true, 1.0);
 
 	Format(desc, sizeof(desc), "%t", "irs_kicklist_reload");
 	RegServerCmd("sm_irs_kicklist_reload", Command_KickListReload, desc);
@@ -378,6 +380,7 @@ public OnAllPluginsLoaded()
 {
 	b_useDonator = LibraryExists("donator.core");
 	b_useEntWatch = LibraryExists("entWatch");
+	b_useGFLClanru = LibraryExists("GFLClanru");
 
 	new Handle:h_Plugin;
 	new Handle:arr_Plugins = CreateArray(64);
@@ -427,6 +430,10 @@ public OnLibraryRemoved(const String:name[])
 	{
 		b_useEntWatch = false;
 	}
+	else if (StrEqual(name, "GFLClanru"))
+	{
+		b_useGFLClanru = false;
+	}
 }
 
 public OnLibraryAdded(const String:name[])
@@ -438,6 +445,10 @@ public OnLibraryAdded(const String:name[])
 	else if (StrEqual(name, "entWatch"))
 	{
 		b_useEntWatch = true;
+	}
+	else if (StrEqual(name, "GFLClanru"))
+	{
+		b_useGFLClanru = true;
 	}
 }
 
@@ -492,7 +503,7 @@ GetRealClientCount()
 	return ClientCount;
 }
 
-public bool:OnClientPreConnectEx(const String:name[], String:password[255], const String:ip[], const String:steamID[], String:rejectReason[255])
+public EConnect OnClientPreConnectEx(const String:name[], String:password[255], const String:ip[], const String:steamID[], String:rejectReason[255])
 {
 	new AdminId:AdminID = FindAdminByIdentity(AUTHMETHOD_STEAM, steamID);
 
@@ -517,13 +528,13 @@ public bool:OnClientPreConnectEx(const String:name[], String:password[255], cons
 	if (!isMVM && GetClientCount(false) < MaxClients)
 	{
 		//LogToFileEx(g_LogFilePath, "[DEBUG] Game is not full or MVM game mode is disabled");
-		return true;
+		return k_OnClientPreConnectEx_Accept;
 	}
 
 	if (isMVM && GetRealClientCount() < MAX_CLIENTS_MVM)
 	{
 		//LogToFileEx(g_LogFilePath, "[DEBUG] Game is MVM but there's still room available (%d clients connected)", GetRealClientCount());
-		return true;
+		return k_OnClientPreConnectEx_Accept;
 	}
 
 	if (GetConVarInt(cvar_KickListMode) == 2)
@@ -539,11 +550,11 @@ public bool:OnClientPreConnectEx(const String:name[], String:password[255], cons
 				{
 					Format(rejectReason, sizeof(rejectReason), "%t", "IRS Reject Reason");
 				}
-				return false;
+				return k_OnClientPreConnectEx_Reject;
 			}
 			else
 			{
-				return true;
+				return k_OnClientPreConnectEx_Accept;
 			}
 		}
 	}
@@ -562,7 +573,7 @@ public bool:OnClientPreConnectEx(const String:name[], String:password[255], cons
 		if (IRS_KickValidClient(AdminID, name, steamID, ImmunityLevel, isDonator))
 		{
 			//LogToFileEx(g_LogFilePath, "[DEBUG] Plugin has made successful kick and will now allow client to connect");
-			return true;
+			return k_OnClientPreConnectEx_Accept;
 		}
 		else if (GetConVarInt(cvar_RejectReasonEnable) || isMVM)
 		{
@@ -572,7 +583,7 @@ public bool:OnClientPreConnectEx(const String:name[], String:password[255], cons
 				Format(rejectReason, sizeof(rejectReason), "%t", "IRS Reject Reason");
 			}
 			//LogToFileEx(g_LogFilePath, "[DEBUG] No slot for connecting client, refusing connection (rejection mode)");
-			return false;
+			return k_OnClientPreConnectEx_Reject;
 		}
 		//else
 		//{
@@ -588,12 +599,56 @@ public bool:OnClientPreConnectEx(const String:name[], String:password[255], cons
 		{
 			Format(rejectReason, sizeof(rejectReason), "%t", "IRS Reject Reason");
 		}
-		return false;
+		return k_OnClientPreConnectEx_Reject;
+	}
+
+	if (b_useGFLClanru)
+	{
+		new Handle:pack = CreateDataPack();
+		WritePackString(pack, name);
+		AsyncHasSteamIDReservedSlot(steamID, AsyncHasSteamIDReservedSlotCallback, pack);
+
+		return k_OnClientPreConnectEx_Async;
 	}
 
 	//LogToFileEx(g_LogFilePath, "[DEBUG] End of preconnection code");
 
-	return true;
+	return k_OnClientPreConnectEx_Accept;
+}
+
+public void AsyncHasSteamIDReservedSlotCallback(const char[] sSteam32ID, int Result, any Data)
+{
+	// Slot free'd up while waiting or doesn't have a reserved slot?
+	if(GetClientCount(false) < MaxClients || !Result)
+	{
+		ClientPreConnectEx(sSteam32ID, k_OnClientPreConnectEx_Accept, "");
+		return;
+	}
+
+	new String:name[MAX_NAME_LENGTH];
+	ResetPack(Data);
+	ReadPackString(Data, name, sizeof(name));
+
+	if (IRS_KickValidClient(INVALID_ADMIN_ID, name, sSteam32ID, 0, true))
+	{
+		//LogToFileEx(g_LogFilePath, "[DEBUG] Plugin has made successful kick and will now allow client to connect");
+		ClientPreConnectEx(sSteam32ID, k_OnClientPreConnectEx_Accept, "");
+		return;
+	}
+	else if (GetConVarInt(cvar_RejectReasonEnable) || isMVM)
+	{
+		char rejectReason[255];
+		GetConVarString(cvar_RejectReason, rejectReason, sizeof(rejectReason));
+		if (StrEqual(rejectReason, "default", false))
+		{
+			Format(rejectReason, sizeof(rejectReason), "%t", "IRS Reject Reason");
+		}
+		//LogToFileEx(g_LogFilePath, "[DEBUG] No slot for connecting client, refusing connection (rejection mode)");
+		ClientPreConnectEx(sSteam32ID, k_OnClientPreConnectEx_Reject, rejectReason);
+		return;
+	}
+
+	ClientPreConnectEx(sSteam32ID, k_OnClientPreConnectEx_Accept, "");
 }
 #endif
 
@@ -772,7 +827,7 @@ bool:IRS_KickValidClient(const AdminId:ConnectingClientAdminID, const String:Con
 		}
 
 		decl String:PlayerAuth[32];
-		GetClientAuthString(i, PlayerAuth, sizeof(PlayerAuth));
+		GetClientAuthId(i, AuthId_Steam2, PlayerAuth, sizeof(PlayerAuth));
 		new AdminId:PlayerAdmin = FindAdminByIdentity(AUTHMETHOD_STEAM, PlayerAuth)
 		ClientImmunity[i] = GetAdminImmunityLevel(PlayerAdmin);
 
@@ -824,17 +879,17 @@ bool:IRS_KickValidClient(const AdminId:ConnectingClientAdminID, const String:Con
 			continue;
 		}
 
+		if (b_useEntWatch && IsClientInGame(i) && entWatch_HasSpecialItem(i))
+		{
+			if (Logging == 1)
+			{
+				IRS_LogClient(i, clientTeam[i], ClientImmunity[i]);
+			}
+			continue;
+		}
+
 		if (IsClientInGame(i))
 		{
-			if (b_useEntWatch && entWatch_HasSpecialItem(i))
-			{
-				if (Logging == 1)
-				{
-					IRS_LogClient(i, clientTeam[i], ClientImmunity[i]);
-				}
-				continue;
-			}
-
 			switch (KickType)
 			{
 				case 0:
@@ -964,7 +1019,7 @@ bool:IRS_KickValidClient(const AdminId:ConnectingClientAdminID, const String:Con
 			if (useKickList)
 			{
 				decl String:PlayerAuth[32];
-				GetClientAuthString(i, PlayerAuth, sizeof(PlayerAuth));
+				GetClientAuthId(i, AuthId_Steam2, PlayerAuth, sizeof(PlayerAuth));
 				if (FindStringInArray(arr_KickListIDs, PlayerAuth) == -1)
 				{
 					if (Logging == 1)
@@ -1091,7 +1146,7 @@ bool:IRS_KickValidClient(const AdminId:ConnectingClientAdminID, const String:Con
 		decl String:KickName[32];
 		decl String:KickAuthid[32];
 		GetClientName(KickTarget, KickName, sizeof(KickName));
-		GetClientAuthString(KickTarget, KickAuthid, sizeof(KickAuthid));
+		GetClientAuthId(KickTarget, AuthId_Steam2, KickAuthid, sizeof(KickAuthid));
 
 		if (!immunityKick)
 		{

@@ -27,7 +27,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX",
 	description  = "Fixes the 'status' command",
-	version      = "1.1",
+	version      = "1.2",
 	url          = ""
 };
 
@@ -98,7 +98,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		Format(sSendBuffer, sizeof(sSendBuffer), "%stags    : %s\n", sSendBuffer, sServerTags);
 		Format(sSendBuffer, sizeof(sSendBuffer), "%s%edicts : %d/%d/%d (used/max/free)\n", sSendBuffer, GetEntityCount(), GetMaxEntities(), GetMaxEntities() - GetEntityCount());
 		Format(sSendBuffer, sizeof(sSendBuffer), "%splayers : %d humans | %d bots (%d/%d)\n", sSendBuffer, iRealClients, iFakeClients, iTotalClients, MaxClients);
-		Format(sSendBuffer, sizeof(sSendBuffer), "%s# %8s %40s %24s %12s %4s %4s %s", sSendBuffer, "userid", "name", "uniqueid", "connected", "ping", "loss", "state");
+		Format(sSendBuffer, sizeof(sSendBuffer), "%s# %8s %40s %24s %12s %4s %4s %s %s", sSendBuffer, "userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr");
 
 		g_hPlayerList[client] = CreateArray(ByteCountToCells(1000));
 
@@ -117,6 +117,7 @@ public Action Command_Status(int client, const char[] command, int args)
 				char sPlayerPing[4];
 				char sPlayerLoss[4];
 				static char sPlayerState[16];
+				char sPlayerAddr[16];
 
 				Format(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
 				Format(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
@@ -144,8 +145,11 @@ public Action Command_Status(int client, const char[] command, int args)
 				else
 					Format(sPlayerState, sizeof(sPlayerState), "spawning");
 
+				if(GetAdminFlag(GetUserAdmin(client), Admin_Ban))
+					GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
+
 				static char sFormatted[128];
-				Format(sFormatted, sizeof(sFormatted), "# %8s %40s %24s %12s %4s %4s %s\n", sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState);
+				Format(sFormatted, sizeof(sFormatted), "# %8s %40s %24s %12s %4s %4s %s %s\n", sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, sPlayerAddr);
 
 				int iFormattedLength = strlen(sFormatted);
 				if(iBufLength + iFormattedLength >= 1000)

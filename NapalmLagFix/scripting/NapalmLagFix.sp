@@ -34,7 +34,7 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 public OnPluginStart()
 {
 	// Convars.
-	new Handle:hCvar = CreateConVar("sm_napalmlagfix_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	new Handle:hCvar = CreateConVar("sm_napalmlagfix_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	SetConVarString(hCvar, PLUGIN_VERSION);
 
 	// Gamedata.

@@ -31,7 +31,7 @@ enum CCC_ColorType {
  * 
  * On error/errors:		Invalid client index or client is not in game
  */
-native CCC_GetColor(client, CCC_ColorType:type, &bool:alpha = false);
+native int CCC_GetColor(int client, CCC_ColorType type, bool &alpha = false);
 
 /**
  * Sets a client's color as a hexadecimal integer.
@@ -44,7 +44,7 @@ native CCC_GetColor(client, CCC_ColorType:type, &bool:alpha = false);
  * 
  * On error/errors:		Invalid client index or client is not in game
  */
-native bool:CCC_SetColor(client, CCC_ColorType:type, color, bool:alpha);
+native int CCC_SetColor(int client, CCC_ColorType type, int color, bool alpha);
 
 /**
  * Gets a client's tag
@@ -56,7 +56,7 @@ native bool:CCC_SetColor(client, CCC_ColorType:type, color, bool:alpha);
  * 
  * On error/errors:		Invalid client index or client is not in game
  */
-native CCC_GetTag(client, String:buffer[], maxlen);
+native int CCC_GetTag(int client, char[] buffer, int maxlen);
 
 /**
  * Sets a client's tag
@@ -67,7 +67,7 @@ native CCC_GetTag(client, String:buffer[], maxlen);
  * 
  * On error/errors:		Invalid client index or client is not in game
  */
-native CCC_SetTag(client, const String:tag[]);
+native void CCC_SetTag(int client, const char[] tag);
 
 /**
  * Resets a client's color to the value in the config file.
@@ -78,7 +78,7 @@ native CCC_SetTag(client, const String:tag[]);
  * 
  * On error/errors:		Invalid client index or client is not in game
  */
-native CCC_ResetColor(client, CCC_ColorType:type);
+native int CCC_ResetColor(int client, CCC_ColorType type);
 
 /**
  * Resets a client's tag to the value in the config file.
@@ -88,7 +88,7 @@ native CCC_ResetColor(client, CCC_ColorType:type);
  * 
  * On error/errors:		Invalid client index or client is not in game
  */
-native CCC_ResetTag(client);
+native int CCC_ResetTag(int client);
 
 /**
  * Called when a cilent's name is about to be colored
@@ -97,8 +97,8 @@ native CCC_ResetTag(client);
  * @param client		Client index
  * @return				Plugin_Handled to prevent coloring, Plugin_Continue to allow coloring
  */
-#pragma deprecated Use CCC_OnColor instead
-forward Action:CCC_OnNameColor(client);
+//#pragma deprecated Use CCC_OnColor instead
+//forward Action:CCC_OnNameColor(client);
 
 /**
  * Called when a client's chat is about to be colored
@@ -107,8 +107,8 @@ forward Action:CCC_OnNameColor(client);
  * @param client		Client index
  * @return				Plugin_Handled to prevent coloring, Plugin_Continue to allow coloring
  */
-#pragma deprecated Use CCC_OnColor instead
-forward Action:CCC_OnChatColor(client);
+//#pragma deprecated Use CCC_OnColor instead
+//forward Action:CCC_OnChatColor(client);
 
 /**
  * Called when a client's name is about to be tagged
@@ -117,8 +117,8 @@ forward Action:CCC_OnChatColor(client);
  * @param client		Client index
  * @return				Plugin_Handled to prevent tagging, Plugin_Continue to allow tagging
  */
-#pragma deprecated Use CCC_OnColor instead
-forward Action:CCC_OnTagApplied(client);
+//#pragma deprecated Use CCC_OnColor instead
+//forward Action:CCC_OnTagApplied(client);
 
 /**
  * Called when a client's name is about to be tagged
@@ -129,7 +129,7 @@ forward Action:CCC_OnTagApplied(client);
  * @param type			What type of color will be applied. If this is CCC_TagColor, it controls whether the tag will be applied at all, not whether the tag will be colored.
  * @return				Plugin_Handled to prevent coloring, Plugin_Continue to allow coloring
  */
-forward Action:CCC_OnColor(client, const String:message[], CCC_ColorType:type);
+//forward Action:CCC_OnColor(client, const String:message[], CCC_ColorType:type);
 
 /**
  * Called when a message has been fully colored and will be sent, unless further plugins modify it through Simple Chat Processor
@@ -139,7 +139,7 @@ forward Action:CCC_OnColor(client, const String:message[], CCC_ColorType:type);
  * @param maxlen		Maximum length of message buffer
  * @noreturn
  */
-forward CCC_OnChatMessage(author, String:message[], maxlen);
+//forward CCC_OnChatMessage(author, String:message[], maxlen);
 
 /**
  * Called when a client's colors and tag are about to be loaded from the config file
@@ -148,7 +148,7 @@ forward CCC_OnChatMessage(author, String:message[], maxlen);
  * @param client		Client index
  * @return				Plugin_Handled or Plugin_Stop to prevent loading, Plugin_Continue or Plugin_Changed to allow
  */
-forward Action:CCC_OnUserConfigPreLoaded(client);
+forward Action CCC_OnUserConfigPreLoaded(int client);
 
 /**
  * Called when a client's colors and tag have been loaded from the config file
@@ -156,18 +156,19 @@ forward Action:CCC_OnUserConfigPreLoaded(client);
  * @param client		Client index
  * @noreturn
  */
-forward CCC_OnUserConfigLoaded(client);
+forward void CCC_OnUserConfigLoaded(int client);
 
 /**
  * Called when the configuration file is reloaded with the sm_reloadccc command
  * 
  * @noreturn
  */
-forward CCC_OnConfigReloaded();
+forward void CCC_OnConfigReloaded();
 
-native void CCC_UpdateIgnoredArray(bool IgnoredArray[(MAXPLAYERS + 1) * (MAXPLAYERS + 1)]);
+native int CCC_UpdateIgnoredArray(bool IgnoredArray[(MAXPLAYERS + 1) * (MAXPLAYERS + 1)]);
 
-public SharedPlugin:__pl_ccc = {
+public SharedPlugin __pl_ccc = 
+{
 	name = "ccc",
 	file = "custom-chatcolors.smx",
 #if defined REQUIRE_PLUGIN

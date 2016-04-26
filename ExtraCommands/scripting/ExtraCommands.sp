@@ -27,13 +27,13 @@ public OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 	RegAdminCmd("sm_hp", Command_Health, ADMFLAG_GENERIC, "sm_hp <#userid|name> <value>");
-	RegAdminCmd("sm_kevlar", Command_Kevlar, ADMFLAG_GENERIC, "sm_kevlar <#userid|name> <value>");
+	RegAdminCmd("sm_armor", Command_Armor, ADMFLAG_GENERIC, "sm_armor <#userid|name> <value>");
 	RegAdminCmd("sm_weapon", Command_Weapon, ADMFLAG_GENERIC, "sm_weapon <#userid|name> <name> [clip] [ammo]");
 	RegAdminCmd("sm_give", Command_Weapon, ADMFLAG_GENERIC, "sm_give <#userid|name> <name> [clip] [ammo]");
 	RegAdminCmd("sm_strip", Command_Strip, ADMFLAG_GENERIC, "sm_strip <#userid|name>");
-	RegAdminCmd("sm_buyzone", Command_BuyZone, ADMFLAG_CUSTOM3, "sm_buyzone <#userid|name> <0|1>");
-	RegAdminCmd("sm_iammo", Command_InfAmmo, ADMFLAG_CUSTOM3, "sm_iammo <#userid|name> <0|1>");
-	RegAdminCmd("sm_speed", Command_Speed, ADMFLAG_CUSTOM3, "sm_speed <#userid|name> <0|1>");
+	RegAdminCmd("sm_buyzone", Command_BuyZone, ADMFLAG_GENERIC, "sm_buyzone <#userid|name> <0|1>");
+	RegAdminCmd("sm_iammo", Command_InfAmmo, ADMFLAG_GENERIC, "sm_iammo <#userid|name> <0|1>");
+	RegAdminCmd("sm_speed", Command_Speed, ADMFLAG_GENERIC, "sm_speed <#userid|name> <0|1>");
 
 	HookEvent("bomb_planted", Event_BombPlanted, EventHookMode_Pre);
 	HookEvent("bomb_defused", Event_BombDefused, EventHookMode_Pre);
@@ -229,11 +229,11 @@ public Action:Command_Health(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_Kevlar(client, args)
+public Action:Command_Armor(client, args)
 {
 	if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_kevlar <#userid|name> <value>");
+		ReplyToCommand(client, "[SM] Usage: sm_armor <#userid|name> <value>");
 		return Plugin_Handled;
 	}
 
@@ -364,6 +364,11 @@ public Action:Command_Weapon(client, args)
 	{
 		for(new i = 0; i < target_count; i++)
 			SetEntProp(target_list[i], Prop_Send, "m_bHasNightVision", 1, 1);
+	}
+	else if(StrEqual(weapon, "item_defuser", false))
+	{
+		for(new i = 0; i < target_count; i++)
+			SetEntProp(target_list[i], Prop_Send, "m_bHasDefuser", 1);
 	}
 	else
 	{

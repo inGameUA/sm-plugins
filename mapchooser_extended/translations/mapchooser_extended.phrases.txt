@@ -3,12 +3,12 @@
 	"Vote Nextmap"
 	{
 		"en"			"Vote for the next map!"
-	}	
+	}
 
 	"Nextmap Voting Started"
 	{
 		"en"			"Voting for next map has started."
-	}	
+	}
 
 	"Nextmap Voting Finished"
 	{
@@ -21,7 +21,7 @@
 		"#format"			"{1:i},{2:i}"
 		"en"			"The current map has been extended. (Received {1}%% of {2} votes)"
 	}
-	
+
 	"Extend Map"
 	{
 		"en"			"Extend Current Map"
@@ -41,7 +41,7 @@
 	"Changed Next Map"
 	{
 		"#format"		"{1:s}"
-		"en"		"Changed nextmap to \"{1}\"."	
+		"en"		"Changed nextmap to \"{1}\"."
 	}
 
 	"Runoff Vote Nextmap"

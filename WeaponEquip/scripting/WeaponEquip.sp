@@ -22,8 +22,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	g_hCvar_WeaponSecondary = CreateConVar("sm_weaponequip_secondary", "weapon_elite", "The name of the secondary weapon to give.", FCVAR_PLUGIN);
-	g_hCvar_WeaponPrimary = CreateConVar("sm_weaponequip_primary", "weapon_p90", "The name of the secondary weapon to give.", FCVAR_PLUGIN);
+	g_hCvar_WeaponSecondary = CreateConVar("sm_weaponequip_secondary", "weapon_elite", "The name of the secondary weapon to give.");
+	g_hCvar_WeaponPrimary = CreateConVar("sm_weaponequip_primary", "weapon_p90", "The name of the secondary weapon to give.");
 
 	AutoExecConfig(true, "plugin.WeaponEquip");
 }

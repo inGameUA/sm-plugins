@@ -25,6 +25,8 @@ public Plugin:myinfo =
 //----------------------------------------------------------------------------------------------------
 public OnPluginStart()
 {
+	LoadTranslations("common.phrases");
+
 	RegAdminCmd("sm_forceinput", Command_ForceInput, ADMFLAG_ROOT);
 	RegAdminCmd("sm_forceinputplayer", Command_ForceInputPlayer, ADMFLAG_ROOT);
 }
@@ -53,7 +55,7 @@ public Action:Command_ForceInputPlayer(client, args)
 			client,
 			target_list,
 			MAXPLAYERS,
-			COMMAND_FILTER_ALIVE,
+			0,
 			target_name,
 			sizeof(target_name),
 			tn_is_ml)) <= 0)

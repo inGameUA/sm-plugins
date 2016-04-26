@@ -26,36 +26,36 @@ public Plugin myinfo =
 	name = "Good AFK Manager",
 	author = "BotoX",
 	description = "A good AFK manager?",
-	version = "1.0",
+	version = "1.1",
 	url = ""
 };
 
-public Cvar_KickTime(Handle:cvar, const String:oldvalue[], const String:newvalue[])
+public void Cvar_KickTime(Handle:cvar, const char[] oldvalue, const char[] newvalue)
 {
 	g_fKickTime = GetConVarFloat(cvar);
 }
-public Cvar_MoveTime(Handle:cvar, const String:oldvalue[], const String:newvalue[])
+public void Cvar_MoveTime(Handle:cvar, const char[] oldvalue, const char[] newvalue)
 {
 	g_fMoveTime = GetConVarFloat(cvar);
 }
-public Cvar_WarnTime(Handle:cvar, const String:oldvalue[], const String:newvalue[])
+public void Cvar_WarnTime(Handle:cvar, const char[] oldvalue, const char[] newvalue)
 {
 	g_fWarnTime = GetConVarFloat(cvar);
 }
-public Cvar_KickMinPlayers(Handle:cvar, const String:oldvalue[], const String:newvalue[])
+public void Cvar_KickMinPlayers(Handle:cvar, const char[] oldvalue, const char[] newvalue)
 {
 	g_iKickMinPlayers = GetConVarInt(cvar);
 }
-public Cvar_MoveMinPlayers(Handle:cvar, const String:oldvalue[], const String:newvalue[])
+public void Cvar_MoveMinPlayers(Handle:cvar, const char[] oldvalue, const char[] newvalue)
 {
 	g_iMoveMinPlayers = GetConVarInt(cvar);
 }
-public Cvar_Immunity(Handle:cvar, const String:oldvalue[], const String:newvalue[])
+public void Cvar_Immunity(Handle:cvar, const char[] oldvalue, const char[] newvalue)
 {
 	g_iImmunity = GetConVarInt(cvar);
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	Handle cvar;
 	HookConVarChange((cvar = CreateConVar("sm_afk_move_min", "4", "Min players for AFK move")), Cvar_MoveMinPlayers);
@@ -85,24 +85,21 @@ public OnPluginStart()
 	AutoExecConfig(true, "plugin.AfkManager");
 }
 
-public OnMapStart()
+public void OnMapStart()
 {
 	CreateTimer(AFK_CHECK_INTERVAL, Timer_CheckPlayer, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-	for (int Index = 1; Index <= MaxClients; Index++)
-	{
-		g_Players_bEnabled[Index] = false;
-		if (IsClientConnected(Index) && IsClientInGame(Index) && !IsFakeClient(Index))
-			InitializePlayer(Index);
-	}
 }
 
-CheckAdminImmunity(Index)
+int CheckAdminImmunity(int Index)
 {
+	if(!IsClientAuthorized(Index))
+		return false;
+
 	AdminId Id = GetUserAdmin(Index);
 	return GetAdminFlag(Id, Admin_Generic);
 }
 
-ResetPlayer(Index)
+void ResetPlayer(int Index)
 {
 	g_Players_bEnabled[Index] = false;
 	g_Players_bFlagged[Index] = false;
@@ -113,9 +110,9 @@ ResetPlayer(Index)
 	g_Players_iSpecTarget[Index] = 0;
 }
 
-InitializePlayer(Index)
+void InitializePlayer(int Index)
 {
-	if (!(g_iImmunity == 1 && CheckAdminImmunity(Index)))
+	if(!(g_iImmunity == 1 && CheckAdminImmunity(Index)))
 	{
 		ResetPlayer(Index);
 		g_Players_iLastAction[Index] = GetTime();
@@ -123,36 +120,37 @@ InitializePlayer(Index)
 	}
 }
 
-public OnClientPostAdminCheck(Index)
+public void OnClientConnected(int client)
 {
-	if (!IsFakeClient(Index))
+	ResetPlayer(client);
+}
+
+public void OnClientPostAdminCheck(int Index)
+{
+	if(!IsFakeClient(Index))
 		InitializePlayer(Index);
 }
 
-public OnClientDisconnect(Index)
+public void OnClientDisconnect(int Index)
 {
 	ResetPlayer(Index);
 }
 
-public Action:Event_PlayerTeamPost(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_PlayerTeamPost(Handle event, const char[] name, bool dontBroadcast)
 {
 	int Index = GetClientOfUserId(GetEventInt(event, "userid"));
-	if (Index > 0 && !IsFakeClient(Index))
-	{
-		if (!g_Players_bEnabled[Index])
-			InitializePlayer(Index);
+	if(Index > 0 && !IsFakeClient(Index))
 		g_Players_iLastAction[Index] = GetTime();
-	}
 }
 
-public Action:Command_Say(Index, const String:Command[], Args)
+public Action Command_Say(Index, const char[] Command, Args)
 {
 	g_Players_iLastAction[Index] = GetTime();
 }
 
-public Action:OnPlayerRunCmd(Index, &iButtons, &iImpulse, Float:fVel[3], Float:fAngles[3], &iWeapon)
+public Action OnPlayerRunCmd(int Index, int &iButtons, int &iImpulse, float fVel[3], float fAngles[3], int &iWeapon)
 {
-	if (((g_Players_fEyePosition[Index][0] != fAngles[0]) ||
+	if(((g_Players_fEyePosition[Index][0] != fAngles[0]) ||
 		(g_Players_fEyePosition[Index][1] != fAngles[1]) ||
 		(g_Players_fEyePosition[Index][2] != fAngles[2]))
 		&& g_Players_iSpecMode[Index] != 4) // OBS_MODE_IN_EYE
@@ -172,33 +170,33 @@ public Action:OnPlayerRunCmd(Index, &iButtons, &iImpulse, Float:fVel[3], Float:f
 	return Plugin_Continue;
 }
 
-public Action:Timer_CheckPlayer(Handle:Timer, any:Data)
+public Action Timer_CheckPlayer(Handle Timer, any Data)
 {
 	int Index;
 	int Clients = 0;
 
-	for (Index = 1; Index <= MaxClients; Index++)
+	for(Index = 1; Index <= MaxClients; Index++)
 	{
-		if (IsClientInGame(Index) && !IsFakeClient(Index))
+		if(IsClientInGame(Index) && !IsFakeClient(Index))
 			Clients++;
 	}
 
 	bool bMovePlayers = (Clients >= g_iMoveMinPlayers && g_fMoveTime > 0.0);
 	bool bKickPlayers = (Clients >= g_iKickMinPlayers && g_fKickTime > 0.0);
 
-	if (!bMovePlayers && !bKickPlayers)
+	if(!bMovePlayers && !bKickPlayers)
 		return Plugin_Continue;
 
-	for (Index = 1; Index <= MaxClients; Index++)
+	for(Index = 1; Index <= MaxClients; Index++)
 	{
-		if (!g_Players_bEnabled[Index] || !IsClientInGame(Index)) // Is this player actually in the game?
+		if(!g_Players_bEnabled[Index] || !IsClientInGame(Index))
 			continue;
 
 		int iTeamNum = GetClientTeam(Index);
 
-		if (IsClientObserver(Index))
+		if(IsClientObserver(Index))
 		{
-			if (iTeamNum > CS_TEAM_SPECTATOR && !IsPlayerAlive(Index))
+			if(iTeamNum > CS_TEAM_SPECTATOR && !IsPlayerAlive(Index))
 				continue;
 
 			int iSpecMode = g_Players_iSpecMode[Index];
@@ -207,68 +205,66 @@ public Action:Timer_CheckPlayer(Handle:Timer, any:Data)
 			g_Players_iSpecMode[Index] = GetEntProp(Index, Prop_Send, "m_iObserverMode");
 			g_Players_iSpecTarget[Index] = GetEntPropEnt(Index, Prop_Send, "m_hObserverTarget");
 
-			if ((iSpecMode && g_Players_iSpecMode[Index] != iSpecMode) || (iSpecTarget && g_Players_iSpecTarget[Index] != iSpecTarget))
+			if((iSpecMode && g_Players_iSpecMode[Index] != iSpecMode) || (iSpecTarget && g_Players_iSpecTarget[Index] != iSpecTarget))
 				g_Players_iLastAction[Index] = GetTime();
 		}
 
 		int IdleTime = GetTime() - g_Players_iLastAction[Index];
 
-		if (g_Players_bFlagged[Index] && (g_fKickTime - IdleTime) > 0.0)
+		if(g_Players_bFlagged[Index] && (g_fKickTime - IdleTime) > 0.0)
 		{
 			PrintCenterText(Index, "Welcome back!");
-			PrintToChat(Index, "\x04[AFK] \x01You have been un-flagged for being inactive.");
+			PrintToChat(Index, "\x04[AFK]\x01 You have been un-flagged for being inactive.");
 			g_Players_bFlagged[Index] = false;
 		}
 
-		if (bMovePlayers && iTeamNum > CS_TEAM_SPECTATOR && ( !g_iImmunity || g_iImmunity == 2 || !CheckAdminImmunity(Index)))
+		if(bMovePlayers && iTeamNum > CS_TEAM_SPECTATOR && (!g_iImmunity || g_iImmunity == 2 || !CheckAdminImmunity(Index)))
 		{
 			float iTimeleft = g_fMoveTime - IdleTime;
-			if (iTimeleft > 0.0)
+			if(iTimeleft > 0.0)
 			{
 				if(iTimeleft <= g_fWarnTime)
 				{
 					PrintCenterText(Index, "Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
-					PrintToChat(Index, "\x04[AFK] \x01Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
+					PrintToChat(Index, "\x04[AFK]\x01 Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
 				}
 			}
 			else
 			{
-				decl String:f_Name[MAX_NAME_LENGTH+4];
-				Format(f_Name, sizeof(f_Name), "\x03%N\x01", Index);
-				PrintToChatAll("\x04[AFK] \x01%s was moved to spectate for being AFK too long.", f_Name);
+				PrintToChatAll("\x04[AFK] \x03%N\x01 was moved to spectate for being AFK too long.", Index);
 				ForcePlayerSuicide(Index);
 				ChangeClientTeam(Index, CS_TEAM_SPECTATOR);
 			}
 		}
-		else if (g_fKickTime > 0.0 && (!g_iImmunity || g_iImmunity == 3 || !CheckAdminImmunity(Index)))
+		else if(g_fKickTime > 0.0 && (!g_iImmunity || g_iImmunity == 3 || !CheckAdminImmunity(Index)))
 		{
 			float iTimeleft = g_fKickTime - IdleTime;
-			if (iTimeleft > 0.0)
+			if(iTimeleft > 0.0)
 			{
-				if (iTimeleft <= g_fWarnTime)
+				if(iTimeleft <= g_fWarnTime)
 				{
 					PrintCenterText(Index, "Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
-					PrintToChat(Index, "\x04[AFK] \x01Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
+					PrintToChat(Index, "\x04[AFK]\x01 Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
 				}
 			}
 			else
 			{
-				if (!g_Players_bFlagged[Index])
+				if(!g_Players_bFlagged[Index])
 				{
-					PrintToChat(Index, "\x04[AFK] \x01You have been kick-flagged for being inactive.");
+					PrintToChat(Index, "\x04[AFK]\x01 You have been kick-flagged for being inactive.");
 					g_Players_bFlagged[Index] = true;
 				}
 				int FlaggedPlayers = 0;
 				int Position = 1;
-				for (int Index_ = 1; Index_ <= MaxClients; Index_++)
+				for(int Index_ = 1; Index_ <= MaxClients; Index_++)
 				{
-					if (!g_Players_bFlagged[Index_])
+					if(!g_Players_bFlagged[Index_])
 						continue;
 
 					FlaggedPlayers++;
 					int IdleTime_ = GetTime() - g_Players_iLastAction[Index_];
 
-					if (IdleTime_ > IdleTime)
+					if(IdleTime_ > IdleTime)
 						Position++;
 				}
 				PrintCenterText(Index, "You have been kick-flagged for being inactive. [%d/%d]", Position, FlaggedPlayers);
@@ -281,27 +277,24 @@ public Action:Timer_CheckPlayer(Handle:Timer, any:Data)
 		int InactivePlayer = -1;
 		int InactivePlayerTime = 0;
 
-		for (Index = 1; Index <= MaxClients; Index++)
+		for(Index = 1; Index <= MaxClients; Index++)
 		{
-			if (!g_Players_bFlagged[Index])
+			if(!g_Players_bEnabled[Index] || !g_Players_bFlagged[Index])
 				continue;
 
 			int IdleTime = GetTime() - g_Players_iLastAction[Index];
-
-			if (IdleTime > InactivePlayerTime)
+			if(IdleTime >= g_fKickTime && IdleTime > InactivePlayerTime)
 			{
 				InactivePlayer = Index;
 				InactivePlayerTime = IdleTime;
 			}
 		}
 
-		if (InactivePlayer == -1)
+		if(InactivePlayer == -1)
 			break;
 		else
 		{
-			decl String:f_Name[MAX_NAME_LENGTH+4];
-			Format(f_Name, sizeof(f_Name), "\x03%N\x01", InactivePlayer);
-			PrintToChatAll("\x04[AFK] %s was kicked for being AFK too long. (%d seconds)", f_Name, InactivePlayerTime);
+			PrintToChatAll("\x04[AFK] \x03%N\x01 was kicked for being AFK too long. (%d seconds)", InactivePlayer, InactivePlayerTime);
 			KickClient(InactivePlayer, "[AFK] You were kicked for being AFK too long. (%d seconds)", InactivePlayerTime);
 			Clients--;
 			g_Players_bFlagged[InactivePlayer] = false;

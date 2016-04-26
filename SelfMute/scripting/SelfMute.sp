@@ -19,7 +19,7 @@ bool g_Plugin_zombiereloaded = false;
 bool g_Plugin_voiceannounce_ex = false;
 bool g_Plugin_AdvancedTargeting = false;
 
-#define PLUGIN_VERSION "2.0"
+#define PLUGIN_VERSION "2.0.1"
 
 public Plugin myinfo =
 {
@@ -50,6 +50,8 @@ char g_PlayerNames[MAXPLAYERS+1][MAX_NAME_LENGTH];
 
 public void OnPluginStart()
 {
+	LoadTranslations("common.phrases");
+
 	CreateConVar("sm_selfmute_version", PLUGIN_VERSION, "Version of Self-Mute", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 
 	RegConsoleCmd("sm_sm", Command_SelfMute, "Mute player by typing !sm [playername]");
@@ -803,84 +805,94 @@ void DisplayUnMuteMenu(int client)
 /*
  * HOOKS
 */
-int g_MsgDest;
-int g_MsgClient;
-char g_MsgName[256];
-char g_MsgParam1[256];
-char g_MsgParam2[256];
-char g_MsgParam3[256];
-char g_MsgParam4[256];
-int g_MsgPlayersNum;
-int g_MsgPlayers[MAXPLAYERS + 1];
+#define MAX_MESSAGES 8
 
-int g_TimerDerp = 0;
+int g_MsgDest[MAX_MESSAGES];
+int g_MsgClient[MAX_MESSAGES] = {-1, ...};
+char g_MsgName[MAX_MESSAGES][256];
+char g_MsgParam1[MAX_MESSAGES][256];
+char g_MsgParam2[MAX_MESSAGES][256];
+char g_MsgParam3[MAX_MESSAGES][256];
+char g_MsgParam4[MAX_MESSAGES][256];
+int g_MsgPlayersNum[MAX_MESSAGES];
+int g_MsgPlayers[MAX_MESSAGES][MAXPLAYERS + 1];
+
+int g_NumMessages = 0;
 
 public Action Hook_UserMessageRadioText(UserMsg msg_id, Handle bf, const int[] players, int playersNum, bool reliable, bool init)
 {
-	g_MsgDest = BfReadByte(bf);
-	g_MsgClient = BfReadByte(bf);
-	BfReadString(bf, g_MsgName, sizeof(g_MsgName), false);
-	BfReadString(bf, g_MsgParam1, sizeof(g_MsgParam1), false);
-	BfReadString(bf, g_MsgParam2, sizeof(g_MsgParam2), false);
-	BfReadString(bf, g_MsgParam3, sizeof(g_MsgParam3), false);
-	BfReadString(bf, g_MsgParam4, sizeof(g_MsgParam4), false);
+	if(g_NumMessages >= MAX_MESSAGES)
+		return Plugin_Handled; // Silently drop
 
-	g_MsgPlayersNum = playersNum;
+	g_MsgDest[g_NumMessages] = BfReadByte(bf);
+	g_MsgClient[g_NumMessages] = BfReadByte(bf);
+	BfReadString(bf, g_MsgName[g_NumMessages], sizeof(g_MsgName[]), false);
+	BfReadString(bf, g_MsgParam1[g_NumMessages], sizeof(g_MsgParam1[]), false);
+	BfReadString(bf, g_MsgParam2[g_NumMessages], sizeof(g_MsgParam2[]), false);
+	BfReadString(bf, g_MsgParam3[g_NumMessages], sizeof(g_MsgParam3[]), false);
+	BfReadString(bf, g_MsgParam4[g_NumMessages], sizeof(g_MsgParam4[]), false);
+
+	g_MsgPlayersNum[g_NumMessages] = playersNum;
 	for(int i = 0; i < playersNum; i++)
-		g_MsgPlayers[i] = players[i];
-
-	if(!g_TimerDerp)
-		CreateTimer(0.1, Timer_PlayerRadio);
-
-	g_TimerDerp++;
-	if(g_TimerDerp > 1)
-		PrintToServer("DEBUG: Timer_PlayerRadio derped! (%d)", g_TimerDerp);
+		g_MsgPlayers[g_NumMessages][i] = players[i];
 
 	return Plugin_Handled;
 }
 
-char g_MsgRadioSound[256];
+char g_MsgRadioSound[MAX_MESSAGES][256];
 
 public Action Hook_UserMessageSendAudio(UserMsg msg_id, Handle bf, const int[] players, int playersNum, bool reliable, bool init)
 {
-	BfReadString(bf, g_MsgRadioSound, sizeof(g_MsgRadioSound), false);
+	if(g_NumMessages >= MAX_MESSAGES)
+		return Plugin_Handled; // Silently drop
+
+	BfReadString(bf, g_MsgRadioSound[g_NumMessages], sizeof(g_MsgRadioSound[]), false);
+
+	if(!g_NumMessages)
+		CreateTimer(0.1, Timer_PlayerRadio);
+
+	g_NumMessages++;
 
 	return Plugin_Handled;
 }
 
 public Action Timer_PlayerRadio(Handle timer)
 {
-	g_TimerDerp = 0;
-	if(g_MsgClient == -1)
-		return Plugin_Continue;
-
-	int[] players = new int[g_MsgPlayersNum + 1];
-	int playersNum = 0;
-
-	for(int i = 0; i < g_MsgPlayersNum; i++)
+	for(int NumMsg = 0; NumMsg < g_NumMessages; NumMsg++)
 	{
-		int client = g_MsgPlayers[i];
-		if(IsClientInGame(client) && !GetIgnored(client, g_MsgClient))
-			players[playersNum++] = client;
+		if(g_MsgClient[NumMsg] == -1)
+			continue;
+
+		int[] players = new int[g_MsgPlayersNum[NumMsg] + 1];
+		int playersNum = 0;
+
+		for(int i = 0; i < g_MsgPlayersNum[NumMsg]; i++)
+		{
+			int client = g_MsgPlayers[NumMsg][i];
+			if(IsClientInGame(client) && !GetIgnored(client, g_MsgClient[NumMsg]))
+				players[playersNum++] = client;
+		}
+
+		Handle RadioText = StartMessage("RadioText", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+		BfWriteByte(RadioText, g_MsgDest[NumMsg]);
+		BfWriteByte(RadioText, g_MsgClient[NumMsg]);
+		BfWriteString(RadioText, g_MsgName[NumMsg]);
+		BfWriteString(RadioText, g_MsgParam1[NumMsg]);
+		BfWriteString(RadioText, g_MsgParam2[NumMsg]);
+		BfWriteString(RadioText, g_MsgParam3[NumMsg]);
+		BfWriteString(RadioText, g_MsgParam4[NumMsg]);
+		EndMessage();
+
+		Handle SendAudio = StartMessage("SendAudio", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+		BfWriteString(SendAudio, g_MsgRadioSound[NumMsg]);
+		EndMessage();
+
+		g_MsgClient[NumMsg] = -1;
 	}
 
-	Handle RadioText = StartMessage("RadioText", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
-	BfWriteByte(RadioText, g_MsgDest);
-	BfWriteByte(RadioText, g_MsgClient);
-	BfWriteString(RadioText, g_MsgName);
-	BfWriteString(RadioText, g_MsgParam1);
-	BfWriteString(RadioText, g_MsgParam2);
-	BfWriteString(RadioText, g_MsgParam3);
-	BfWriteString(RadioText, g_MsgParam4);
-	EndMessage();
+	g_NumMessages = 0;
 
-	Handle SendAudio = StartMessage("SendAudio", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
-	BfWriteString(SendAudio, g_MsgRadioSound);
-	EndMessage();
-
-	g_MsgClient = -1;
-
-	return Plugin_Continue;
+	return Plugin_Stop;
 }
 
 /*

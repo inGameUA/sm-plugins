@@ -38,7 +38,7 @@
 #include <colors>
 #pragma semicolon 1
 
-#define MCE_VERSION "1.10.0"
+#define MCE_VERSION "1.11.0"
 
 public Plugin:myinfo =
 {
@@ -98,6 +98,7 @@ public OnPluginStart()
 	RegConsoleCmd("sm_nomlist", Command_NominateList);
 
 	RegAdminCmd("sm_nominate_addmap", Command_Addmap, ADMFLAG_CHANGEMAP, "sm_nominate_addmap <mapname> - Forces a map to be on the next mapvote.");
+	RegAdminCmd("sm_nominate_removemap", Command_Removemap, ADMFLAG_CHANGEMAP, "sm_nominate_removemap <mapname> - Removes a map from Nominations.");
 
 	// BotoX
 	RegAdminCmd("sm_nominate_exclude", Command_AddExclude, ADMFLAG_CHANGEMAP, "sm_nominate_exclude <mapname> - Forces a map to be inserted into the recently played maps. Effectively blocking the map from being nominated.");
@@ -220,6 +221,39 @@ public Action:Command_Addmap(client, args)
 	return Plugin_Handled;
 }
 
+public Action:Command_Removemap(client, args)
+{
+	if (args != 1)
+	{
+		CReplyToCommand(client, "[NE] Usage: sm_nominate_removemap <mapname>");
+		return Plugin_Handled;
+	}
+
+	decl String:mapname[PLATFORM_MAX_PATH];
+	GetCmdArg(1, mapname, sizeof(mapname));
+
+	// new status;
+	if (/*!GetTrieValue(g_mapTrie, mapname, status)*/!IsMapValid(mapname))
+	{
+		CReplyToCommand(client, "%t", "Map was not found", mapname);
+		return Plugin_Handled;
+	}
+
+	if (!RemoveNominationByMap(mapname))
+	{
+		CReplyToCommand(client, "This map isn't nominated.", mapname);
+
+		return Plugin_Handled;
+	}
+
+	CReplyToCommand(client, "Map '%s' removed from the nominations list.", mapname);
+	LogAction(client, -1, "\"%L\" removed map \"%s\" from nominations.", client, mapname);
+
+	PrintToChatAll("[NE] %N has removed %s from nominations", client, mapname);
+
+	return Plugin_Handled;
+}
+
 public Action:Command_AddExclude(client, args)
 {
 	if (args < 1)
@@ -296,7 +330,7 @@ public Action:Command_Nominate(client, args)
 
 	if (g_NominationDelay > GetTime())
 	{
-		ReplyToCommand(client, "[NE] Nominations will be unlocked in %d seconds", g_NominationDelay - GetTime());
+		PrintToChat(client, "[NE] Nominations will be unlocked in %d seconds", g_NominationDelay - GetTime());
 		return Plugin_Handled;
 	}
 
@@ -308,7 +342,7 @@ public Action:Command_Nominate(client, args)
 
 	if (g_Player_NominationDelay[client] > GetTime())
 	{
-		ReplyToCommand(client, "[NE] Please wait %d seconds before you can nominate again", g_Player_NominationDelay[client] - GetTime());
+		PrintToChat(client, "[NE] Please wait %d seconds before you can nominate again", g_Player_NominationDelay[client] - GetTime());
 		return Plugin_Handled;
 	}
 
@@ -318,7 +352,7 @@ public Action:Command_Nominate(client, args)
 	new status;
 	if (!GetTrieValue(g_mapTrie, mapname, status))
 	{
-		CReplyToCommand(client, "%t", "Map was not found", mapname);
+		CPrintToChat(client, "%t", "Map was not found", mapname);
 		return Plugin_Handled;
 	}
 
@@ -326,17 +360,17 @@ public Action:Command_Nominate(client, args)
 	{
 		if ((status & MAPSTATUS_EXCLUDE_CURRENT) == MAPSTATUS_EXCLUDE_CURRENT)
 		{
-			CReplyToCommand(client, "[NE] %t", "Can't Nominate Current Map");
+			CPrintToChat(client, "[NE] %t", "Can't Nominate Current Map");
 		}
 
 		if ((status & MAPSTATUS_EXCLUDE_PREVIOUS) == MAPSTATUS_EXCLUDE_PREVIOUS)
 		{
-			CReplyToCommand(client, "[NE] %t", "Map in Exclude List");
+			CPrintToChat(client, "[NE] %t", "Map in Exclude List");
 		}
 
 		if ((status & MAPSTATUS_EXCLUDE_NOMINATED) == MAPSTATUS_EXCLUDE_NOMINATED)
 		{
-			CReplyToCommand(client, "[NE] %t", "Map Already Nominated");
+			CPrintToChat(client, "[NE] %t", "Map Already Nominated");
 		}
 
 		return Plugin_Handled;
@@ -348,11 +382,11 @@ public Action:Command_Nominate(client, args)
 	{
 		if (result == Nominate_AlreadyInVote)
 		{
-			CReplyToCommand(client, "[NE] %t", "Map Already In Vote", mapname);
+			CPrintToChat(client, "[NE] %t", "Map Already In Vote", mapname);
 		}
 		else if (result == Nominate_VoteFull)
 		{
-			CReplyToCommand(client, "[ME] %t", "Max Nominations");
+			CPrintToChat(client, "[ME] %t", "Max Nominations");
 		}
 
 		return Plugin_Handled;
@@ -384,7 +418,7 @@ public Action:Command_NominateList(client, args)
 	GetNominatedMapList(MapList);
 	if (!GetArraySize(MapList))
 	{
-		CReplyToCommand(client, "[NE] No maps have been nominated.");
+		CPrintToChat(client, "[NE] No maps have been nominated.");
 		return Plugin_Handled;
 	}
 
@@ -516,6 +550,13 @@ public Handler_MapSelectMenu(Handle:menu, MenuAction:action, param1, param2)
 	{
 		case MenuAction_Select:
 		{
+			if (g_Player_NominationDelay[param1] > GetTime())
+			{
+				PrintToChat(param1, "[NE] Please wait %d seconds before you can nominate again", g_Player_NominationDelay[param1] - GetTime());
+				DisplayMenuAtItem(menu, param1, GetMenuSelectionPosition(), MENU_TIME_FOREVER);
+				return 0;
+			}
+
 			decl String:map[PLATFORM_MAX_PATH], String:name[MAX_NAME_LENGTH];
 			GetMenuItem(menu, param2, map, sizeof(map));
 
@@ -543,6 +584,7 @@ public Handler_MapSelectMenu(Handle:menu, MenuAction:action, param1, param2)
 				PrintToChatAll("[NE] %t", "Map Nomination Changed", name, map);
 
 			LogMessage("%s nominated %s", name, map);
+			g_Player_NominationDelay[param1] = GetTime() + GetConVarInt(g_Cvar_NominateDelay);
 		}
 
 		case MenuAction_DrawItem:

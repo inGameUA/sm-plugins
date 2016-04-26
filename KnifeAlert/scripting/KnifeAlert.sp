@@ -14,7 +14,7 @@ public Plugin myinfo =
 	name         = "Knife Notifications",
 	author       = "Obus + BotoX",
 	description  = "Notify administrators when zombies have been knifed by humans.",
-	version      = "2.1",
+	version      = "2.2",
 	url          = ""
 };
 
@@ -106,12 +106,8 @@ public Action Event_PlayerHurt(Handle hEvent, const char[] name, bool dontBroadc
 			else
 				LogMessage("%L killed %L (Recently knifed by a disconnected player [%s])", attacker, victim, g_sAttackerSID[attacker]);
 
-			for(int i = 1; i <= MaxClients; i++)
-			{
-				if(IsClientConnected(i) && IsClientInGame(i) && (IsClientSourceTV(i) || GetAdminFlag(GetUserAdmin(i), Admin_Generic)))
-					CPrintToChat(i, "{green}[SM] {red}%N {green}(%s){default} killed {blue}%N{default} - knifed by {blue}%s {green}(%s)",
-						attacker, sAtkSID, victim, (pOldKnifer != -1) ? sAtkAttackerName : "a disconnected player", g_sAttackerSID[attacker]);
-			}
+			CPrintToChatAll("{green}[SM] {red}%N {green}(%s){default} killed {blue}%N{default} - knifed by {blue}%s {green}(%s)",
+				attacker, sAtkSID, victim, (pOldKnifer != -1) ? sAtkAttackerName : "a disconnected player", g_sAttackerSID[attacker]);
 		}
 	}
 }

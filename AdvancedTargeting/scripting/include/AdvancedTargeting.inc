@@ -6,7 +6,7 @@
 native int IsClientFriend(int client, int friend);
 native int ReadClientFriends(int client);
 
-public SharedPlugin:__pl_AdvancedTargeting =
+public SharedPlugin __pl_AdvancedTargeting =
 {
 	name = "AdvancedTargeting",
 	file = "AdvancedTargeting.smx",
@@ -18,7 +18,7 @@ public SharedPlugin:__pl_AdvancedTargeting =
 };
 
 #if !defined REQUIRE_PLUGIN
-public __pl_myfile_SetNTVOptional()
+public __pl_AdvancedTargeting_SetNTVOptional()
 {
 	MarkNativeAsOptional("IsClientFriend");
 	MarkNativeAsOptional("ReadClientFriends");

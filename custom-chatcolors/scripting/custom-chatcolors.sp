@@ -3,13 +3,17 @@
 #include <sourcemod>
 #include <regex>
 #include <morecolors>
-#include <ccc>
 //#undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION		"5.3.0"
+#pragma newdecls required
 
-public Plugin:myinfo =
+#include <ccc>
+
+#define PLUGIN_VERSION		"6.1.0"
+#define MAX_CHAT_LENGTH		192
+
+public Plugin myinfo =
 {
 	name        = "Custom Chat Colors & Tags & Allchat",
 	author      = "Dr. McKay, edit by id/Obus, BotoX",
@@ -18,53 +22,55 @@ public Plugin:myinfo =
 	url         = "http://www.doctormckay.com"
 };
 
-new Handle:colorForward;
-new Handle:nameForward;
-new Handle:tagForward;
-new Handle:applicationForward;
-new Handle:messageForward;
-new Handle:preLoadedForward;
-new Handle:loadedForward;
-new Handle:configReloadedForward;
-new Handle:g_hCoolDown = INVALID_HANDLE;
-new Handle:g_hGreenText = INVALID_HANDLE;
-//new Handle:g_hAdminMenu = INVALID_HANDLE;
+//Handle colorForward;
+//Handle nameForward;
+//Handle tagForward;
+//Handle applicationForward;
+//Handle messageForward;
+Handle preLoadedForward;
+Handle loadedForward;
+Handle configReloadedForward;
+Handle g_hGreenText = null;
+Handle g_hReplaceText = null;
+//Handle g_hAdminMenu = null;
 
-new String:g_sTag[MAXPLAYERS + 1][64];
-new String:g_sTagColor[MAXPLAYERS + 1][12];
-new String:g_sUsernameColor[MAXPLAYERS + 1][12];
-new String:g_sChatColor[MAXPLAYERS + 1][12];
+char g_sTag[MAXPLAYERS + 1][64];
+char g_sTagColor[MAXPLAYERS + 1][12];
+char g_sUsernameColor[MAXPLAYERS + 1][12];
+char g_sChatColor[MAXPLAYERS + 1][12];
 
-new String:g_sDefaultTag[MAXPLAYERS + 1][32];
-new String:g_sDefaultTagColor[MAXPLAYERS + 1][12];
-new String:g_sDefaultUsernameColor[MAXPLAYERS + 1][12];
-new String:g_sDefaultChatColor[MAXPLAYERS + 1][12];
-new const String:g_sColorsArray[120][2][32] = { {"aliceblue", "F0F8FF" }, { "aqua", "00FFFF" }, { "aquamarine", "7FFFD4" }, { "azure", "007FFF" }, { "beige", "F5F5DC" }, { "black", "000000" }, { "blue", "99CCFF" }, { "blueviolet", "8A2BE2" }, { "brown", "A52A2A" }, { "burlywood", "DEB887" }, { "cadetblue", "5F9EA0" }, { "chocolate", "D2691E" }, { "corrupted", "A32C2E" }, { "crimson", "DC143C" }, { "cyan", "00FFFF" }, { "darkblue", "00008B" }, { "darkcyan", "008B8B" }, { "darkgoldenrod", "B8860B" }, { "darkgray", "A9A9A9" }, { "darkgrey", "A9A9A9" }, { "darkgreen", "006400" }, { "darkkhaki", "BDB76B" }, { "darkmagenta", "8B008B" }, { "darkolivegreen", "556B2F" }, { "darkorange", "FF8C00" }, { "darkorchid", "9932CC" }, { "darkred", "8B0000" }, { "darksalmon", "E9967A" }, { "darkseagreen", "8FBC8F" }, { "darkslateblue", "483D8B" }, { "darkturquoise", "00CED1" }, { "darkviolet", "9400D3" }, { "deeppink", "FF1493" }, { "deepskyblue", "00BFFF" }, { "dimgray", "696969" }, { "dodgerblue", "1E90FF" }, { "firebrick", "B22222" }, { "floralwhite", "FFFAF0" }, { "forestgreen", "228B22" }, { "frozen", "4983B3" }, { "fuchsia", "FF00FF" }, { "fullblue", "0000FF" }, { "fullred", "FF0000" }, { "ghostwhite", "F8F8FF" }, { "gold", "FFD700" }, { "gray", "CCCCCC" }, { "green", "3EFF3E" }, { "greenyellow", "ADFF2F" }, { "hotpink", "FF69B4" }, { "indianred", "CD5C5C" }, { "indigo", "4B0082" }, { "ivory", "FFFFF0" }, { "khaki", "F0E68C" }, { "lightblue", "ADD8E6" }, { "lightcoral", "F08080" }, { "lightcyan", "E0FFFF" }, { "lightgoldenrodyellow", "FAFAD2" }, { "lightgray", "D3D3D3" }, { "lightgrey", "D3D3D3" }, { "lightgreen", "99FF99" }, { "lightpink", "FFB6C1" }, { "lightsalmon", "FFA07A" }, { "lightseagreen", "20B2AA" }, { "lightskyblue", "87CEFA" }, { "lightslategray", "778899" }, { "lightslategrey", "778899" }, { "lightsteelblue", "B0C4DE" }, { "lightyellow", "FFFFE0" }, { "lime", "00FF00" }, { "limegreen", "32CD32" }, { "magenta", "FF00FF" }, { "maroon", "800000" }, { "mediumaquamarine", "66CDAA" }, { "mediumblue", "0000CD" }, { "mediumorchid", "BA55D3" }, { "mediumturquoise", "48D1CC" }, { "mediumvioletred", "C71585" }, { "midnightblue", "191970" }, { "mintcream", "F5FFFA" }, { "mistyrose", "FFE4E1" }, { "moccasin", "FFE4B5" }, { "navajowhite", "FFDEAD" }, { "navy", "000080" }, { "oldlace", "FDF5E6" }, { "olive", "9EC34F" }, { "olivedrab", "6B8E23" }, { "orange", "FFA500" }, { "orangered", "FF4500" }, { "orchid", "DA70D6" }, { "palegoldenrod", "EEE8AA" }, { "palegreen", "98FB98" }, { "palevioletred", "D87093" }, { "pink", "FFC0CB" }, { "plum", "DDA0DD" }, { "powderblue", "B0E0E6" }, { "purple", "800080" }, { "red", "FF4040" }, { "rosybrown", "BC8F8F" }, { "royalblue", "4169E1" }, { "saddlebrown", "8B4513" }, { "salmon", "FA8072" }, { "sandybrown", "F4A460" }, { "seagreen", "2E8B57" }, { "seashell", "FFF5EE" }, { "silver", "C0C0C0" }, { "skyblue", "87CEEB" }, { "slateblue", "6A5ACD" }, { "slategray", "708090" }, { "slategrey", "708090" }, { "snow", "FFFAFA" }, { "springgreen", "00FF7F" }, { "steelblue", "4682B4" }, { "tan", "D2B48C" }, { "teal", "008080" }, { "tomato", "FF6347" }, { "turquoise", "40E0D0" }, { "violet", "EE82EE" }, { "white", "FFFFFF" }, { "yellow", "FFFF00" }, { "yellowgreen", "9ACD32" } }; //you want colors? here bomb array fak u
+char g_sDefaultTag[MAXPLAYERS + 1][32];
+char g_sDefaultTagColor[MAXPLAYERS + 1][12];
+char g_sDefaultUsernameColor[MAXPLAYERS + 1][12];
+char g_sDefaultChatColor[MAXPLAYERS + 1][12];
+char g_sColorsArray[120][2][32] = { {"aliceblue", "F0F8FF" }, { "aqua", "00FFFF" }, { "aquamarine", "7FFFD4" }, { "azure", "007FFF" }, { "beige", "F5F5DC" }, { "black", "000000" }, { "blue", "99CCFF" }, { "blueviolet", "8A2BE2" }, { "brown", "A52A2A" }, { "burlywood", "DEB887" }, { "cadetblue", "5F9EA0" }, { "chocolate", "D2691E" }, { "corrupted", "A32C2E" }, { "crimson", "DC143C" }, { "cyan", "00FFFF" }, { "darkblue", "00008B" }, { "darkcyan", "008B8B" }, { "darkgoldenrod", "B8860B" }, { "darkgray", "A9A9A9" }, { "darkgrey", "A9A9A9" }, { "darkgreen", "006400" }, { "darkkhaki", "BDB76B" }, { "darkmagenta", "8B008B" }, { "darkolivegreen", "556B2F" }, { "darkorange", "FF8C00" }, { "darkorchid", "9932CC" }, { "darkred", "8B0000" }, { "darksalmon", "E9967A" }, { "darkseagreen", "8FBC8F" }, { "darkslateblue", "483D8B" }, { "darkturquoise", "00CED1" }, { "darkviolet", "9400D3" }, { "deeppink", "FF1493" }, { "deepskyblue", "00BFFF" }, { "dimgray", "696969" }, { "dodgerblue", "1E90FF" }, { "firebrick", "B22222" }, { "floralwhite", "FFFAF0" }, { "forestgreen", "228B22" }, { "frozen", "4983B3" }, { "fuchsia", "FF00FF" }, { "fullblue", "0000FF" }, { "fullred", "FF0000" }, { "ghostwhite", "F8F8FF" }, { "gold", "FFD700" }, { "gray", "CCCCCC" }, { "green", "3EFF3E" }, { "greenyellow", "ADFF2F" }, { "hotpink", "FF69B4" }, { "indianred", "CD5C5C" }, { "indigo", "4B0082" }, { "ivory", "FFFFF0" }, { "khaki", "F0E68C" }, { "lightblue", "ADD8E6" }, { "lightcoral", "F08080" }, { "lightcyan", "E0FFFF" }, { "lightgoldenrodyellow", "FAFAD2" }, { "lightgray", "D3D3D3" }, { "lightgrey", "D3D3D3" }, { "lightgreen", "99FF99" }, { "lightpink", "FFB6C1" }, { "lightsalmon", "FFA07A" }, { "lightseagreen", "20B2AA" }, { "lightskyblue", "87CEFA" }, { "lightslategray", "778899" }, { "lightslategrey", "778899" }, { "lightsteelblue", "B0C4DE" }, { "lightyellow", "FFFFE0" }, { "lime", "00FF00" }, { "limegreen", "32CD32" }, { "magenta", "FF00FF" }, { "maroon", "800000" }, { "mediumaquamarine", "66CDAA" }, { "mediumblue", "0000CD" }, { "mediumorchid", "BA55D3" }, { "mediumturquoise", "48D1CC" }, { "mediumvioletred", "C71585" }, { "midnightblue", "191970" }, { "mintcream", "F5FFFA" }, { "mistyrose", "FFE4E1" }, { "moccasin", "FFE4B5" }, { "navajowhite", "FFDEAD" }, { "navy", "000080" }, { "oldlace", "FDF5E6" }, { "olive", "9EC34F" }, { "olivedrab", "6B8E23" }, { "orange", "FFA500" }, { "orangered", "FF4500" }, { "orchid", "DA70D6" }, { "palegoldenrod", "EEE8AA" }, { "palegreen", "98FB98" }, { "palevioletred", "D87093" }, { "pink", "FFC0CB" }, { "plum", "DDA0DD" }, { "powderblue", "B0E0E6" }, { "purple", "800080" }, { "red", "FF4040" }, { "rosybrown", "BC8F8F" }, { "royalblue", "4169E1" }, { "saddlebrown", "8B4513" }, { "salmon", "FA8072" }, { "sandybrown", "F4A460" }, { "seagreen", "2E8B57" }, { "seashell", "FFF5EE" }, { "silver", "C0C0C0" }, { "skyblue", "87CEEB" }, { "slateblue", "6A5ACD" }, { "slategray", "708090" }, { "slategrey", "708090" }, { "snow", "FFFAFA" }, { "springgreen", "00FF7F" }, { "steelblue", "4682B4" }, { "tan", "D2B48C" }, { "teal", "008080" }, { "tomato", "FF6347" }, { "turquoise", "40E0D0" }, { "violet", "EE82EE" }, { "white", "FFFFFF" }, { "yellow", "FFFF00" }, { "yellowgreen", "9ACD32" } }; //you want colors? here bomb array fak u
 
-new String:g_sPath[PLATFORM_MAX_PATH];
-new String:g_sBanPath[PLATFORM_MAX_PATH];
+char g_sPath[PLATFORM_MAX_PATH];
+char g_sReplacePath[PLATFORM_MAX_PATH];
+char g_sBanPath[PLATFORM_MAX_PATH];
 
-new bool:g_bWaitingForChatInput[MAXPLAYERS + 1];
-new bool:g_bTagToggled[MAXPLAYERS + 1];
-new String:g_sReceivedChatInput[MAXPLAYERS + 1][64];
-new String:g_sInputType[MAXPLAYERS + 1][32];
-new String:g_sATargetSID[MAXPLAYERS + 1][64];
-new g_iATarget[MAXPLAYERS + 1];
+bool g_bWaitingForChatInput[MAXPLAYERS + 1];
+bool g_bTagToggled[MAXPLAYERS + 1];
+char g_sReceivedChatInput[MAXPLAYERS + 1][64];
+char g_sInputType[MAXPLAYERS + 1][32];
+char g_sATargetSID[MAXPLAYERS + 1][64];
+int g_iATarget[MAXPLAYERS + 1];
 
-new Handle:g_hConfigFile;
-new Handle:g_hBanFile;
+Handle g_hConfigFile;
+Handle g_hReplaceConfigFile;
+Handle g_hBanFile;
 
-new g_msgAuthor;
-new bool:g_msgIsChat;
-new String:g_msgName[128];
-new String:g_msgSender[128];
-new String:g_msgText[512];
-new String:g_msgFinal[1024];
-new bool:g_msgIsTeammate;
+int g_msgAuthor;
+bool g_msgIsChat;
+char g_msgName[128];
+char g_msgSender[128];
+char g_msgText[MAX_CHAT_LENGTH];
+char g_msgFinal[255];
+bool g_msgIsTeammate;
 
-new bool:g_Ignored[(MAXPLAYERS + 1) * (MAXPLAYERS + 1)] = {false, ...};
+bool g_Ignored[(MAXPLAYERS + 1) * (MAXPLAYERS + 1)] = {false, ...};
 
-public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	MarkNativeAsOptional("Updater_AddPlugin");
 
@@ -82,18 +88,18 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 	return APLRes_Success;
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 	LoadTranslations("allchat.phrases");
 
-	//new Handle:g_hTemporary = INVALID_HANDLE;
-	//if(LibraryExists("adminmenu") && ((g_hTemporary = GetAdminTopMenu()) != INVALID_HANDLE))
+	//new Handle g_hTemporary = null;
+	//if(LibraryExists("adminmenu") && ((g_hTemporary = GetAdminTopMenu()) != null))
 	//{
 	//	OnAdminMenuReady(g_hTemporary);
 	//}
 
-	new UserMsg:SayText2 = GetUserMessageId("SayText2");
+	UserMsg SayText2 = GetUserMessageId("SayText2");
 
 	if (SayText2 == INVALID_MESSAGE_ID)
 	{
@@ -113,6 +119,7 @@ public OnPluginStart()
 	RegAdminCmd("sm_cccunban", Command_CCCUnban, ADMFLAG_SLAY, "Unbans a user and allows for change of his tag, tag color, name color and chat text color");
 	RegAdminCmd("sm_tagmenu", Command_TagMenu, ADMFLAG_CUSTOM1, "Shows the main \"tag & colors\" menu");
 	RegAdminCmd("sm_tag", Command_SetTag, ADMFLAG_CUSTOM1, "Changes your custom tag");
+	RegAdminCmd("sm_tags", Command_TagMenu, ADMFLAG_CUSTOM1, "Shows the main \"tag & colors\" menu");
 	RegAdminCmd("sm_cleartag", Command_ClearTag, ADMFLAG_CUSTOM1, "Clears your custom tag");
 	RegAdminCmd("sm_tagcolor", Command_SetTagColor, ADMFLAG_CUSTOM1, "Changes the color of your custom tag");
 	RegAdminCmd("sm_cleartagcolor", Command_ClearTagColor, ADMFLAG_CUSTOM1, "Clears the color from your custom tag");
@@ -122,26 +129,25 @@ public OnPluginStart()
 	RegAdminCmd("sm_chatcolor", Command_SetTextColor, ADMFLAG_CUSTOM1, "Changes the color of your chat text");
 	RegAdminCmd("sm_cleartextcolor", Command_ClearTextColor, ADMFLAG_CUSTOM1, "Clears the color from your chat text");
 	RegAdminCmd("sm_clearchatcolor", Command_ClearTextColor, ADMFLAG_CUSTOM1, "Clears the color from your chat text");
-	RegConsoleCmd("sm_toggletag", Command_ToggleTag, "Toggles whether or not your tag and colors show in the chat");
+	RegAdminCmd("sm_toggletag", Command_ToggleTag, ADMFLAG_CUSTOM1, "Toggles whether or not your tag and colors show in the chat");
 
 	AddCommandListener(Command_Say, "say");
 	AddCommandListener(Command_Say, "say_team");
-	//RegConsoleCmd("sm_test", Command_Test);
 
-	if (g_hCoolDown != INVALID_HANDLE)
-		CloseHandle(g_hCoolDown);
-
-	if (g_hGreenText != INVALID_HANDLE)
+	if (g_hGreenText != null)
 		CloseHandle(g_hGreenText);
 
-	g_hCoolDown = CreateConVar("sm_ccccooldown", "1", "Tag/Color changes cooldown period (in seconds)", FCVAR_NOTIFY|FCVAR_REPLICATED, true, 1.0);
-	g_hGreenText = CreateConVar("sm_cccgreentext", "1", "Enables greentexting (First chat character must be \">\")");
+	if (g_hReplaceText != null)
+		CloseHandle(g_hReplaceText);
 
-	colorForward = CreateGlobalForward("CCC_OnChatColor", ET_Event, Param_Cell);
-	nameForward = CreateGlobalForward("CCC_OnNameColor", ET_Event, Param_Cell);
-	tagForward = CreateGlobalForward("CCC_OnTagApplied", ET_Event, Param_Cell);
-	applicationForward = CreateGlobalForward("CCC_OnColor", ET_Event, Param_Cell, Param_String, Param_Cell);
-	messageForward = CreateGlobalForward("CCC_OnChatMessage", ET_Ignore, Param_Cell, Param_String, Param_Cell);
+	g_hGreenText = CreateConVar("sm_cccgreentext", "1", "Enables greentexting (First chat character must be \">\")", FCVAR_REPLICATED);
+	g_hReplaceText = CreateConVar("sm_cccreplacetext", "1", "Enables text replacing as defined in configs/custom-chatcolorsreplace.cfg", FCVAR_REPLICATED);
+
+	//colorForward = CreateGlobalForward("CCC_OnChatColor", ET_Event, Param_Cell);
+	//nameForward = CreateGlobalForward("CCC_OnNameColor", ET_Event, Param_Cell);
+	//tagForward = CreateGlobalForward("CCC_OnTagApplied", ET_Event, Param_Cell);
+	//applicationForward = CreateGlobalForward("CCC_OnColor", ET_Event, Param_Cell, Param_String, Param_Cell);
+	//messageForward = CreateGlobalForward("CCC_OnChatMessage", ET_Ignore, Param_Cell, Param_String, Param_Cell);
 	preLoadedForward = CreateGlobalForward("CCC_OnUserConfigPreLoaded", ET_Event, Param_Cell);
 	loadedForward = CreateGlobalForward("CCC_OnUserConfigLoaded", ET_Ignore, Param_Cell);
 	configReloadedForward = CreateGlobalForward("CCC_OnConfigReloaded", ET_Ignore);
@@ -149,55 +155,53 @@ public OnPluginStart()
 	LoadConfig();
 }
 
-LoadConfig()
+void LoadConfig()
 {
-	if (g_hConfigFile != INVALID_HANDLE)
-	{
+	if (g_hConfigFile != null)
 		CloseHandle(g_hConfigFile);
-	}
 
-	if (g_hBanFile != INVALID_HANDLE)
-	{
+	if (g_hReplaceConfigFile != null)
+		CloseHandle(g_hReplaceConfigFile);
+
+	if (g_hBanFile != null)
 		CloseHandle(g_hBanFile);
-	}
 
 	g_hConfigFile = CreateKeyValues("admin_colors");
+	g_hReplaceConfigFile = CreateKeyValues("AutoReplace");
 	g_hBanFile = CreateKeyValues("restricted_users");
 
 	BuildPath(Path_SM, g_sPath, sizeof(g_sPath), "configs/custom-chatcolors.cfg");
+	BuildPath(Path_SM, g_sReplacePath, sizeof(g_sReplacePath), "configs/custom-chatcolorsreplace.cfg");
 	BuildPath(Path_SM, g_sBanPath, sizeof(g_sBanPath), "configs/custom-chatcolorsbans.cfg");
 
 	if (!FileToKeyValues(g_hConfigFile, g_sPath))
-	{
-		SetFailState("[CCC] Config file missing");
-	}
+		SetFailState("[CCC] Config file missing, please make sure \"custom-chatcolors.cfg\" is in the \"sourcemod/configs\" folder.");
+
+	if (!FileToKeyValues(g_hReplaceConfigFile, g_sReplacePath))
+		SetFailState("[CCC] Replace file missing, please make sure \"custom-chatcolorsreplace.cfg\" is in the \"sourcemod/configs\" folder.");
 
 	if (!FileToKeyValues(g_hBanFile, g_sBanPath))
-	{
-		SetFailState("[CCC] Ban file missing");
-	}
+		SetFailState("[CCC] Ban file missing, please make sure \"custom-chatcolorsbans.cfg\" is in the \"sourcemod/configs\" folder.");
 
-	for (new i = 1; i <= MaxClients; i++)
+	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (!IsClientInGame(i) || IsFakeClient(i))
-		{
 			continue;
-		}
 
 		ClearValues(i);
 		OnClientPostAdminCheck(i);
 	}
 }
 
-/*public OnLibraryRemoved(const String:name[])
+/* public OnLibraryRemoved(const char name[])
 {
 	if (StrEqual(name, "adminmenu"))
 	{
-		g_hAdminMenu = INVALID_HANDLE;
+		g_hAdminMenu = null;
 	}
 }
 
-public OnAdminMenuReady(Handle:CCCAMenu)
+public OnAdminMenuReady(Handle CCCAMenu)
 {
 	if (CCCAMenu == g_hAdminMenu)
 	{
@@ -215,78 +219,44 @@ public OnAdminMenuReady(Handle:CCCAMenu)
 	AddToTopMenu(g_hAdminMenu, "CCCReset", TopMenuObject_Item, Handle_AMenuReset, MenuObject, "sm_cccreset", ADMFLAG_SLAY);
 	AddToTopMenu(g_hAdminMenu, "CCCBan", TopMenuObject_Item, Handle_AMenuBan, MenuObject, "sm_cccban", ADMFLAG_SLAY);
 	AddToTopMenu(g_hAdminMenu, "CCCUnBan", TopMenuObject_Item, Handle_AMenuUnBan, MenuObject, "sm_cccunban", ADMFLAG_SLAY);
-}*/ //figure out why reloading the plugin makes this admin menu take control of other admin menus
+} */
 
-public Action:Command_Test(client, args)
+bool MakeStringPrintable(char[] str, int str_len_max, const char[] empty) //function taken from Forlix FloodCheck (http://forlix.org/gameaddons/floodcheck.shtml)
 {
-	decl String:Arg[64];
-	decl String:SArg[64];
-	decl String:TArg[64];
-	new color;
-	GetCmdArg(1, Arg, sizeof(SArg));
-	GetCmdArg(2, SArg, sizeof(SArg));
-	GetCmdArg(3, TArg, sizeof(SArg));
-	color |= ((StringToInt(Arg, 10) & 0xFF) << 16);
-	color |= ((StringToInt(SArg, 10) & 0xFF) << 8);
-	color |= ((StringToInt(TArg, 10) & 0xFF) << 0);
-
-	if (IsValidHex(Arg))
-	{
-		ReplaceString(Arg, 64, "#", "");
-		PrintToChat(client, "%02X, %04X, %06X", Arg, Arg, Arg);
-		new Hex, r, g, b;
-		StringToIntEx(Arg, Hex, 16);
-		r = ((Hex >> 16) & 0xFF);
-		g = ((Hex >> 8) & 0xFF);
-		b = ((Hex >> 0) & 0xFF);
-
-
-		PrintToChat(client, "Hex = %s, R = %i, G = %i, B = %i", Arg, r, g, b);
-	}
-	else
-	{
-		PrintToChat(client, "Arg: %d, SArg: %d, TArg: %d", StringToInt(Arg),StringToInt(SArg),StringToInt(TArg));
-		PrintToChat(client, "%06X", color);
-		//PrintToChat(client, "test %X, r = %i, g = %i, b = %i", test, r, g, b);
-	}
-}
-
-bool:MakeStringPrintable(String:str[], str_len_max, const String:empty[]) //function taken from Forlix FloodCheck (http://forlix.org/gameaddons/floodcheck.shtml)
-{
-	new r = 0;
-	new w = 0;
-	new bool:modified = false;
-	new bool:nonspace = false;
-	new bool:addspace = false;
+	int r = 0;
+	int w = 0;
+	bool modified = false;
+	bool nonspace = false;
+	bool addspace = false;
 
 	if (str[0])
-	do
-	  {
-		if(str[r] < '\x20')
+	{
+		do
 		{
-		  modified = true;
+			if (str[r] < '\x20')
+			{
+			  modified = true;
 
-		  if((str[r] == '\n'
-		  ||  str[r] == '\t')
-		  && w > 0
-		  && str[w-1] != '\x20')
-			addspace = true;
+			  if((str[r] == '\n' || str[r] == '\t') && w > 0 && str[w-1] != '\x20')
+				addspace = true;
+			}
+			else
+			{
+			  if (str[r] != '\x20')
+			  {
+				nonspace = true;
+
+				if (addspace)
+				  str[w++] = '\x20';
+			  }
+
+			  addspace = false;
+			  str[w++] = str[r];
+			}
 		}
-		else
-		{
-		  if(str[r] != '\x20')
-		  {
-			nonspace = true;
+		while(str[++r]);
+	}
 
-			if(addspace)
-			  str[w++] = '\x20';
-		  }
-
-		  addspace = false;
-		  str[w++] = str[r];
-		}
-	  }
-	while(str[++r]);
 	str[w] = '\0';
 
 	if (!nonspace)
@@ -298,7 +268,7 @@ bool:MakeStringPrintable(String:str[], str_len_max, const String:empty[]) //func
 	return (modified);
 }
 
-bool:SingularOrMultiple(int num)
+bool SingularOrMultiple(int num)
 {
 	if (num > 1 || num == 0)
 	{
@@ -308,79 +278,70 @@ bool:SingularOrMultiple(int num)
 	return false;
 }
 
-bool:HasFlag(client, AdminFlag:ADMFLAG)
+bool HasFlag(int client, AdminFlag ADMFLAG)
 {
-	new AdminId:Admin = GetUserAdmin(client);
+	AdminId Admin = GetUserAdmin(client);
 
-	if (Admin != INVALID_ADMIN_ID && GetAdminFlag(Admin, ADMFLAG, Access_Effective) == true)
-	{
+	if (Admin != INVALID_ADMIN_ID && GetAdminFlag(Admin, ADMFLAG, Access_Effective))
 		return true;
-	}
 
 	return false;
 }
 
-bool:NoFilter(String:arg[64])
+bool ForceColor(int client, char Key[64])
 {
-	if (StrEqual(arg[0], "@cts") || StrEqual(arg[0], "@ct") || StrEqual(arg[0], "@all") || StrEqual(arg[0], "@alive") || StrEqual(arg[0], "@admins") || StrEqual(arg[0], "@dead") || StrEqual(arg[0], "@humans") || StrEqual(arg[0], "@t") || StrEqual(arg[0], "@ts") || StrEqual(arg[0], "@!me"))
+	int iTarget;
+	char sTarget[64];
+	char sCol[64];
+	GetCmdArg(1, sTarget, sizeof(sTarget));
+	GetCmdArg(2, sCol, sizeof(sCol));
+
+	if (IsValidRGBNum(sCol))
 	{
-		return true;
-	}
-
-	return false;
-}
-
-int ForceColor(client, String:Key[64])
-{
-	decl String:arg[64];
-	decl String:col[64];
-	GetCmdArg(1, arg, sizeof(arg));
-	GetCmdArg(2, col, sizeof(col));
-
-	decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-
-	if (IsValidRGBNum(col))
-	{
-		new String:g[8];
-		new String:b[8];
+		char g[8];
+		char b[8];
 		GetCmdArg(3, g, sizeof(g));
 		GetCmdArg(4, b, sizeof(b));
-		new hex;
-		hex |= ((StringToInt(col) & 0xFF) << 16);
+		int hex;
+
+		hex |= ((StringToInt(sCol) & 0xFF) << 16);
 		hex |= ((StringToInt(g) & 0xFF) << 8);
 		hex |= ((StringToInt(b) & 0xFF) << 0);
 
-		Format(col, 64, "#%06X", hex);
+		Format(sCol, 64, "#%06X", hex);
 	}
 
-	if (NoFilter(arg))
+	if ((iTarget = FindTarget(client, sTarget, true)) == -1)
 	{
-		ReplyToCommand(client, "[SM] This command only supports special filters <@aim|@me>.");
-		return 1;
+		return false;
 	}
 
-	if ((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS, target_name, sizeof(target_name), tn_is_ml)) <= 0)
-	{
-		ReplyToTargetError(client, target_count);
-		return 2;
-	}
+	char SID[64];
+	GetClientAuthId(iTarget, AuthId_Steam2, SID, sizeof(SID));
 
-	for (new i = 0; i < target_count; i++)
+	if (IsValidHex(sCol))
 	{
-		decl String:SID[64];
-		GetClientAuthId(target_list[i], AuthId_Steam2, SID, sizeof(SID));
+		if (sCol[0] != '#')
+			Format(sCol, sizeof(sCol), "#%s", sCol);
 
-		if (IsValidHex(col))
-			SetColor(SID, Key, col, -1, true, true);
+		SetColor(SID, Key, sCol, -1, true);
+
+		if (!strcmp(Key, "namecolor"))
+			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} name color to: \x07%s#%s{default}!", iTarget, sCol[1], sCol[1]);
+		else if (!strcmp(Key, "tagcolor"))
+			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} tag color to: \x07%s#%s{default}!", iTarget, sCol[1], sCol[1]);
 		else
-			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
+			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} text color to: \x07%s#%s{default}!", iTarget, sCol[1], sCol[1]);
+	}
+	else
+	{
+		CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
 	}
 
-	return 0;
+	return true;
 }
 
-bool:IsValidRGBNum(String:arg[])
+bool IsValidRGBNum(char[] arg)
 {
 	if (SimpleRegexMatch(arg, "^([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])$") == 2)
 	{
@@ -390,7 +351,7 @@ bool:IsValidRGBNum(String:arg[])
 	return false;
 }
 
-bool:IsValidHex(String:arg[])
+bool IsValidHex(char[] arg)
 {
 	if (SimpleRegexMatch(arg, "^(#?)([A-Fa-f0-9]{6})$") == 0)
 	{
@@ -400,7 +361,7 @@ bool:IsValidHex(String:arg[])
 	return true;
 }
 
-bool:SetColor(String:SID[64], String:Key[64], String:HEX[64], client, bool:IgnoreCooldown=false, bool:IgnoreBan=false)
+bool SetColor(char SID[64], char Key[64], char HEX[64], int client, bool IgnoreBan=false)
 {
 	if (!IgnoreBan)
 	{
@@ -419,7 +380,7 @@ bool:SetColor(String:SID[64], String:Key[64], String:HEX[64], client, bool:Ignor
 			}
 			else
 			{
-				decl String:TimeBuffer[64];
+				char TimeBuffer[64];
 				int tstamp = KvGetNum(g_hBanFile, "length");
 				tstamp = (tstamp - GetTime());
 
@@ -451,48 +412,6 @@ bool:SetColor(String:SID[64], String:Key[64], String:HEX[64], client, bool:Ignor
 		}
 	}
 
-	if (!IgnoreCooldown)
-	{
-		KvRewind(g_hConfigFile);
-
-		if (KvJumpToKey(g_hConfigFile, SID, true))
-		{
-			decl String:KeyCD[64];
-			Format(KeyCD, sizeof(KeyCD), "%scd", Key);
-
-			if (KvGetNum(g_hConfigFile, KeyCD) < GetTime())
-			{
-				KvSetNum(g_hConfigFile, KeyCD, GetTime() + GetConVarInt(g_hCoolDown));
-			}
-			else
-			{
-				decl String:TimeBuffer[64];
-				int tstamp = KvGetNum(g_hConfigFile, KeyCD);
-				tstamp = (tstamp - GetTime());
-				int hrs = (tstamp / 3600);
-				int mins = ((tstamp / 60) % 60);
-				int sec = (tstamp % 60);
-
-				if (tstamp > 3600)
-				{
-					Format(TimeBuffer, sizeof(TimeBuffer), "%d %s, %d %s, %d %s", hrs, SingularOrMultiple(hrs) ? "Hours" : "Hour", mins, SingularOrMultiple(mins) ? "Minutes" : "Minute", sec, SingularOrMultiple(sec) ? "Seconds" : "Second");
-				}
-				else if (tstamp > 60)
-				{
-					Format(TimeBuffer, sizeof(TimeBuffer), "%d %s, %d %s", mins, SingularOrMultiple(mins) ? "Minutes" : "Minute", sec, SingularOrMultiple(sec) ? "Seconds" : "Second");
-				}
-				else
-				{
-					Format(TimeBuffer, sizeof(TimeBuffer), "%d %s", sec, SingularOrMultiple(sec) ? "Seconds" : "Second");
-				}
-				//Format(TimeBuffer, sizeof(TimeBuffer), "%d Hours, %d Minutes, %d Seconds", hrs, mins, sec);
-
-				CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Time remaining until you can change your {green}%s{default}: {green}%s", Key, TimeBuffer);
-				return false;
-			}
-		}
-	}
-
 	KvRewind(g_hConfigFile);
 	KvRewind(g_hBanFile);
 
@@ -512,7 +431,7 @@ bool:SetColor(String:SID[64], String:Key[64], String:HEX[64], client, bool:Ignor
 	return true;
 }
 
-bool:SetTag(String:SID[64], String:text[64], client, bool:IgnoreCooldown=false, bool:IgnoreBan=false)
+bool SetTag(char SID[64], char text[64], int client, bool IgnoreBan=false)
 {
 	if (!IgnoreBan)
 	{
@@ -531,7 +450,7 @@ bool:SetTag(String:SID[64], String:text[64], client, bool:IgnoreCooldown=false, 
 			}
 			else
 			{
-				decl String:TimeBuffer[128];
+				char TimeBuffer[128];
 				int tstamp = KvGetNum(g_hBanFile, "length");
 				tstamp = (tstamp - GetTime());
 
@@ -563,45 +482,6 @@ bool:SetTag(String:SID[64], String:text[64], client, bool:IgnoreCooldown=false, 
 		}
 	}
 
-	if (!IgnoreCooldown)
-	{
-		KvRewind(g_hConfigFile);
-
-		if (KvJumpToKey(g_hConfigFile, SID, true))
-		{
-			if (KvGetNum(g_hConfigFile, "tagcd") < GetTime())
-			{
-				KvSetNum(g_hConfigFile, "tagcd", GetTime() + GetConVarInt(g_hCoolDown));
-			}
-			else
-			{
-				decl String:TimeBuffer[128];
-				int tstamp = KvGetNum(g_hConfigFile, "tagcd");
-				tstamp = (tstamp - GetTime());
-				int hrs = (tstamp / 3600);
-				int mins = ((tstamp / 60) % 60);
-				int sec = (tstamp % 60);
-
-				if (tstamp > 3600)
-				{
-					Format(TimeBuffer, sizeof(TimeBuffer), "%d %s, %d %s, %d %s", hrs, SingularOrMultiple(hrs) ? "Hours" : "Hour", mins, SingularOrMultiple(mins) ? "Minutes" : "Minute", sec, SingularOrMultiple(sec) ? "Seconds" : "Second");
-				}
-				else if (tstamp > 60)
-				{
-					Format(TimeBuffer, sizeof(TimeBuffer), "%d %s, %d %s", mins, SingularOrMultiple(mins) ? "Minutes" : "Minute", sec, SingularOrMultiple(sec) ? "Seconds" : "Second");
-				}
-				else
-				{
-					Format(TimeBuffer, sizeof(TimeBuffer), "%d %s", sec, SingularOrMultiple(sec) ? "Seconds" : "Second");
-				}
-				//Format(TimeBuffer, sizeof(TimeBuffer), "%d Hours, %d Minutes, %d Seconds", hrs, mins, sec);
-
-				CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Time remaining until you can change your {green}tag{default}: {green}%s", TimeBuffer);
-				return false;
-			}
-		}
-	}
-
 	KvRewind(g_hConfigFile);
 	KvRewind(g_hBanFile);
 
@@ -613,7 +493,7 @@ bool:SetTag(String:SID[64], String:text[64], client, bool:IgnoreCooldown=false, 
 		}
 		else
 		{
-			decl String:FormattedText[64];
+			char FormattedText[64];
 			VFormat(FormattedText, sizeof(FormattedText), "%.24s ", 2);
 
 			KvSetString(g_hConfigFile, "tag", FormattedText);
@@ -631,7 +511,7 @@ bool:SetTag(String:SID[64], String:text[64], client, bool:IgnoreCooldown=false, 
 	return true;
 }
 
-bool:RemoveCCC(String:SID[64])
+bool RemoveCCC(char SID[64])
 {
 	KvRewind(g_hConfigFile);
 
@@ -654,7 +534,7 @@ bool:RemoveCCC(String:SID[64])
 	return true;
 }
 
-bool:BanCCC(String:SID[64], client, target, String:Time[128])
+bool BanCCC(char SID[64], int client, int target, char Time[128])
 {
 	KvRewind(g_hBanFile);
 
@@ -666,7 +546,7 @@ bool:BanCCC(String:SID[64], client, target, String:Time[128])
 
 	if (KvJumpToKey(g_hBanFile, SID, true))
 	{
-		new time = StringToInt(Time);
+		int time = StringToInt(Time);
 		time = GetTime() + (time * 60);
 
 		if (StringToInt(Time) == 0)
@@ -683,7 +563,7 @@ bool:BanCCC(String:SID[64], client, target, String:Time[128])
 	return true;
 }
 
-bool:UnBanCCC(String:SID[64], client, target)
+bool UnBanCCC(char SID[64], int client, int target)
 {
 	KvRewind(g_hBanFile);
 
@@ -694,12 +574,28 @@ bool:UnBanCCC(String:SID[64], client, target)
 	}
 	else
 	{
-		CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Client not restricted");
+		CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Client not restricted");
 		return false;
 	}
 
 	KvRewind(g_hBanFile);
 	KeyValuesToFile(g_hBanFile, g_sBanPath);
+	return true;
+}
+
+bool ToggleCCC(char SID[64], int client)
+{
+	KvRewind(g_hConfigFile);
+
+	if (KvJumpToKey(g_hConfigFile, SID, true))
+	{
+		g_bTagToggled[client] = view_as<bool>(KvGetNum(g_hConfigFile, "toggled", 0));
+		g_bTagToggled[client] = !g_bTagToggled[client];
+		KvSetNum(g_hConfigFile, "toggled", view_as<bool>(g_bTagToggled[client]));
+	}
+
+	KvRewind(g_hConfigFile);
+	KeyValuesToFile(g_hConfigFile, g_sPath);
 	return true;
 }
 
@@ -713,7 +609,7 @@ bool:UnBanCCC(String:SID[64], client, target)
 //   "Y8888P"   "Y88888P"  888       888 888       888 d88P     888 888    Y888 8888888P"   "Y8888P"
 //
 
-public Action:Command_ReloadConfig(client, args)
+public Action Command_ReloadConfig(int client, int args)
 {
 	LoadConfig();
 
@@ -724,11 +620,11 @@ public Action:Command_ReloadConfig(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_TagMenu(client, args)
+public Action Command_TagMenu(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
-		PrintToServer("[CCC] Cannot use command from server console");
+		ReplyToCommand(client, "[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
@@ -736,14 +632,23 @@ public Action:Command_TagMenu(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_Say(client, const String:command[], argc)
+public Action Command_Say(int client, const char[] command, int argc)
 {
+	char text[MAX_CHAT_LENGTH];
+	GetCmdArgString(text, sizeof(text));
+
+	if (client && !HasFlag(client, Admin_Generic))
+	{
+		if (MakeStringPrintable(text, sizeof(text), ""))
+		{
+			return Plugin_Handled;
+		}
+	}
+
 	if (g_bWaitingForChatInput[client])
 	{
-		decl String:text[64];
-		decl String:SID[64];
+		char SID[64];
 		GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
-		GetCmdArgString(text, sizeof(text));
 
 		if (text[strlen(text)-1] == '"')
 		{
@@ -754,13 +659,8 @@ public Action:Command_Say(client, const String:command[], argc)
 		g_bWaitingForChatInput[client] = false;
 		ReplaceString(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput), "\"", "'");
 
-		if (!HasFlag(client, Admin_Cheats) && !StrEqual(SID, "STEAM_0:0:50540848", true))
-		{
-			if (MakeStringPrintable(text, sizeof(text), ""))
-			{
-				return Plugin_Handled;
-			}
-		}
+		if (g_sReceivedChatInput[client][0] != '#')
+			Format(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "#%s", g_sReceivedChatInput[client]);
 
 		if (StrEqual(g_sInputType[client], "ChangeTag"))
 		{
@@ -816,18 +716,19 @@ public Action:Command_Say(client, const String:command[], argc)
 		}
 		else if (StrEqual(g_sInputType[client], "MenuForceTag"))
 		{
-			if (SetTag(g_sATargetSID[client], g_sReceivedChatInput[client], client, true, true))
+			if (SetTag(g_sATargetSID[client], g_sReceivedChatInput[client], client, true))
 			{
-				CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's tag{default}!", g_iATarget[client]);
+				CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} tag to: {green}%s{default}!", g_iATarget[client], g_sReceivedChatInput[client]);
 			}
 		}
 		else if (StrEqual(g_sInputType[client], "MenuForceTagColor"))
 		{
 			if (IsValidHex(g_sReceivedChatInput[client]))
 			{
-				if (SetColor(g_sATargetSID[client], "tagcolor", g_sReceivedChatInput[client], client, true, true))
+				if (SetColor(g_sATargetSID[client], "tagcolor", g_sReceivedChatInput[client], client, true))
 				{
-					CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's tag color{default}!", g_iATarget[client]);
+					ReplaceString(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "#", "");
+					CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} tag color to: \x07%s#%s{default}!", g_iATarget[client], g_sReceivedChatInput[client], g_sReceivedChatInput[client]);
 				}
 			}
 			else
@@ -839,9 +740,10 @@ public Action:Command_Say(client, const String:command[], argc)
 		{
 			if (IsValidHex(g_sReceivedChatInput[client]))
 			{
-				if (SetColor(g_sATargetSID[client], "namecolor", g_sReceivedChatInput[client], client, true, true))
+				if (SetColor(g_sATargetSID[client], "namecolor", g_sReceivedChatInput[client], client, true))
 				{
-					CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's name color{default}!", g_iATarget[client]);
+					ReplaceString(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "#", "");
+					CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} name color to: \x07%s#%s{default}!", g_iATarget[client], g_sReceivedChatInput[client], g_sReceivedChatInput[client]);
 				}
 			}
 			else
@@ -853,9 +755,10 @@ public Action:Command_Say(client, const String:command[], argc)
 		{
 			if (IsValidHex(g_sReceivedChatInput[client]))
 			{
-				if (SetColor(g_sATargetSID[client], "textcolor", g_sReceivedChatInput[client], client, true, true))
+				if (SetColor(g_sATargetSID[client], "textcolor", g_sReceivedChatInput[client], client, true))
 				{
-					CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's text color{default}!", g_iATarget[client]);
+					ReplaceString(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "#", "");
+					CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Successfully set {green}%N's{default} text color to: \x07%s#%s{default}!", g_iATarget[client], g_sReceivedChatInput[client], g_sReceivedChatInput[client]);
 				}
 			}
 			else
@@ -869,33 +772,29 @@ public Action:Command_Say(client, const String:command[], argc)
 	else
 	{
 		if (StrEqual(command, "say_team", false))
-		{
 			g_msgIsTeammate = true;
-		}
 		else
-		{
 			g_msgIsTeammate = false;
-		}
 	}
 
 	return Plugin_Continue;
 }
 
-public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_PlayerSay(Handle event, const char[] name, bool dontBroadcast)
 {
 	if (g_msgAuthor == -1 || GetClientOfUserId(GetEventInt(event, "userid")) != g_msgAuthor)
 	{
 		return;
 	}
 
-	decl players[MaxClients + 1];
-	new playersNum = 0;
+	int[] players = new int[MaxClients + 1];
+	int playersNum = 0;
 
 	if (g_msgIsTeammate && g_msgAuthor > 0)
 	{
-		new team = GetClientTeam(g_msgAuthor);
+		int team = GetClientTeam(g_msgAuthor);
 
-		for (new client = 1; client <= MaxClients; client++)
+		for (int client = 1; client <= MaxClients; client++)
 		{
 			if (IsClientInGame(client) && GetClientTeam(client) == team)
 			{
@@ -906,7 +805,7 @@ public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadc
 	}
 	else
 	{
-		for (new client = 1; client <= MaxClients; client++)
+		for (int client = 1; client <= MaxClients; client++)
 		{
 			if (IsClientInGame(client))
 			{
@@ -916,13 +815,13 @@ public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadc
 		}
 	}
 
-	if (playersNum == 0)
+	if (!playersNum)
 	{
 		g_msgAuthor = -1;
 		return;
 	}
 
-	new Handle:SayText2 = StartMessage("SayText2", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+	Handle SayText2 = StartMessage("SayText2", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
 
 	if (GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf)
 	{
@@ -938,6 +837,7 @@ public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadc
 		BfWriteString(SayText2, g_msgFinal);
 		EndMessage();
 	}
+
 	g_msgAuthor = -1;
 }
 
@@ -945,47 +845,29 @@ public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadc
 //Force Tag                            /////
 ////////////////////////////////////////////
 
-public Action:Command_ForceTag(client, args)
+public Action Command_ForceTag(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 2)
 	{
-		PrintToChat(client, "[SM] Usage: sm_forcetag <name|#userid|@filter> <tag text>");
+		ReplyToCommand(client, "[SM] Usage: sm_forcetag <name|#userid|@filter> <tag text>");
 		return Plugin_Handled;
 	}
 
-	decl String:arg[64];
-	decl String:arg2[64];
-	GetCmdArg(1, arg, sizeof(arg));
-	GetCmdArg(2, arg2, sizeof(arg2));
+	int iTarget;
+	char sTarget[64];
+	char sTag[64];
+	GetCmdArg(1, sTarget, sizeof(sTarget));
+	GetCmdArg(2, sTag, sizeof(sTag));
 
-	decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-
-	if (NoFilter(arg))
+	if ((iTarget = FindTarget(client, sTarget, true)) == -1)
 	{
-		PrintToChat(client, "[SM] This command only supports special filters <@aim|@me>.");
 		return Plugin_Handled;
 	}
 
-	if ((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS, target_name, sizeof(target_name), tn_is_ml)) <= 0)
-	{
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
+	char SID[64];
+	GetClientAuthId(iTarget, AuthId_Steam2, SID, sizeof(SID));
 
-	for (new i = 0; i < target_count; i++)
-	{
-		decl String:SID[64];
-		GetClientAuthId(target_list[i], AuthId_Steam2, SID, sizeof(SID));
-
-		SetTag(SID, arg2, client, true, true);
-	}
+	SetTag(SID, sTag, client, true);
 
 	return Plugin_Handled;
 }
@@ -994,24 +876,15 @@ public Action:Command_ForceTag(client, args)
 //Force Tag Color                      /////
 ////////////////////////////////////////////
 
-public Action:Command_ForceTagColor(client, args)
+public Action Command_ForceTagColor(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 2)
 	{
-		PrintToChat(client, "[SM] Usage: sm_forcetagcolor <name|#userid|@filter> <RRGGBB HEX|0-255 0-255 0-255 RGB CODE>");
+		ReplyToCommand(client, "[SM] Usage: sm_forcetagcolor <name|#userid|@filter> <RRGGBB HEX|0-255 0-255 0-255 RGB CODE>");
 		return Plugin_Handled;
 	}
 
-	if (ForceColor(client, "tagcolor") != 0)
-	{
-		return Plugin_Handled;
-	}
+	ForceColor(client, "tagcolor");
 
 	return Plugin_Handled;
 }
@@ -1020,24 +893,15 @@ public Action:Command_ForceTagColor(client, args)
 //Force Name Color                     /////
 ////////////////////////////////////////////
 
-public Action:Command_ForceNameColor(client, args)
+public Action Command_ForceNameColor(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 2)
 	{
-		PrintToChat(client, "[SM] Usage: sm_forcenamecolor <name|#userid|@filter> <RRGGBB HEX|0-255 0-255 0-255 RGB CODE>");
+		ReplyToCommand(client, "[SM] Usage: sm_forcenamecolor <name|#userid|@filter> <RRGGBB HEX|0-255 0-255 0-255 RGB CODE>");
 		return Plugin_Handled;
 	}
 
-	if (ForceColor(client, "namecolor") != 0)
-	{
-		return Plugin_Handled;
-	}
+	ForceColor(client, "namecolor");
 
 	return Plugin_Handled;
 }
@@ -1046,24 +910,15 @@ public Action:Command_ForceNameColor(client, args)
 //Force Text Color                     /////
 ////////////////////////////////////////////
 
-public Action:Command_ForceTextColor(client, args)
+public Action Command_ForceTextColor(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 2)
 	{
-		PrintToChat(client, "[SM] Usage: sm_forcetextcolor <name|#userid|@filter> <RRGGBB HEX|0-255 0-255 0-255 RGB CODE>");
+		ReplyToCommand(client, "[SM] Usage: sm_forcetextcolor <name|#userid|@filter> <RRGGBB HEX|0-255 0-255 0-255 RGB CODE>");
 		return Plugin_Handled;
 	}
 
-	if (ForceColor(client, "textcolor") != 0)
-	{
-		return Plugin_Handled;
-	}
+	ForceColor(client, "textcolor");
 
 	return Plugin_Handled;
 }
@@ -1072,46 +927,28 @@ public Action:Command_ForceTextColor(client, args)
 //Reset Tag & Colors                   /////
 ////////////////////////////////////////////
 
-public Action:Command_CCCReset(client, args)
+public Action Command_CCCReset(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 1)
 	{
-		PrintToChat(client, "[SM] Usage: sm_cccreset <name|#userid|@filter>");
+		ReplyToCommand(client, "[SM] Usage: sm_cccreset <name|#userid|@filter>");
 		return Plugin_Handled;
 	}
 
-	decl String:arg[64];
-	GetCmdArg(1, arg, sizeof(arg));
+	int iTarget;
+	char sTarget[64];
+	GetCmdArg(1, sTarget, sizeof(sTarget));
 
-	decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-
-	if (NoFilter(arg))
+	if ((iTarget = FindTarget(client, sTarget, true)) == -1)
 	{
-		PrintToChat(client, "[SM] This command only supports special filters <@aim|@me>.");
 		return Plugin_Handled;
 	}
 
-	if ((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS, target_name, sizeof(target_name), tn_is_ml)) <= 0)
-	{
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
+	char SID[64];
+	GetClientAuthId(iTarget, AuthId_Steam2, SID, sizeof(SID));
 
-	for (new i = 0; i < target_count; i++)
-	{
-		decl String:SID[64];
-		GetClientAuthId(target_list[i], AuthId_Steam2, SID, sizeof(SID));
-
-		CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Cleared {green}%N's tag {default}&{green} colors{default}.", target_list[i]);
-		RemoveCCC(SID);
-	}
+	CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Cleared {green}%N's tag {default}&{green} colors{default}.", iTarget);
+	RemoveCCC(SID);
 
 	return Plugin_Handled;
 }
@@ -1120,52 +957,33 @@ public Action:Command_CCCReset(client, args)
 //Ban Tag & Color Changes              /////
 ////////////////////////////////////////////
 
-public Action:Command_CCCBan(client, args)
+public Action Command_CCCBan(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 1)
 	{
-		PrintToChat(client, "[SM] Usage: sm_cccban <name|#userid|@filter> <optional:time>");
+		ReplyToCommand(client, "[SM] Usage: sm_cccban <name|#userid|@filter> <optional:time>");
 		return Plugin_Handled;
 	}
 
-	decl String:arg[64];
-	decl String:time[128];
-	GetCmdArg(1, arg, sizeof(arg));
-
-	decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
+	int iTarget;
+	char sTarget[64];
+	char sTime[128];
+	GetCmdArg(1, sTarget, sizeof(sTarget));
 
 	if (args > 1)
 	{
-		GetCmdArg(2, time, sizeof(time));
+		GetCmdArg(2, sTime, sizeof(sTime));
 	}
 
-	if (NoFilter(arg))
+	if ((iTarget = FindTarget(client, sTarget, true)) == -1)
 	{
-		PrintToChat(client, "[SM] This command only supports special filters <@aim|@me>.");
 		return Plugin_Handled;
 	}
 
-	if ((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS, target_name, sizeof(target_name), tn_is_ml)) <= 0)
-	{
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
+	char SID[64];
+	GetClientAuthId(iTarget, AuthId_Steam2, SID, sizeof(SID));
 
-	for (new i = 0; i < target_count; i++)
-	{
-		decl String:SID[64];
-		GetClientAuthId(target_list[i], AuthId_Steam2, SID, sizeof(SID));
-
-		RemoveCCC(SID);
-		BanCCC(SID, client, target_list[i], time);
-	}
+	BanCCC(SID, client, iTarget, sTime);
 
 	return Plugin_Handled;
 }
@@ -1174,45 +992,27 @@ public Action:Command_CCCBan(client, args)
 //Allow Tag & Color Changes            /////
 ////////////////////////////////////////////
 
-public Action:Command_CCCUnban(client, args)
+public Action Command_CCCUnban(int client, int args)
 {
-	if (client == 0)
-	{
-		PrintToServer("[CCC] Cannot use command from server console");
-		return Plugin_Handled;
-	}
-
 	if (args < 1)
 	{
-		PrintToChat(client, "[SM] Usage: sm_cccunban <name|#userid|@filter>");
+		ReplyToCommand(client, "[SM] Usage: sm_cccunban <name|#userid|@filter>");
 		return Plugin_Handled;
 	}
 
-	decl String:arg[64];
-	GetCmdArg(1, arg, sizeof(arg));
+	int iTarget;
+	char sTarget[64];
+	GetCmdArg(1, sTarget, sizeof(sTarget));
 
-	decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-
-	if (NoFilter(arg))
+	if ((iTarget = FindTarget(client, sTarget, true)) == -1)
 	{
-		PrintToChat(client, "[SM] This command only supports special filters <@aim|@me>.");
 		return Plugin_Handled;
 	}
 
-	if ((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS, target_name, sizeof(target_name), tn_is_ml)) <= 0)
-	{
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
+	char SID[64];
+	GetClientAuthId(iTarget, AuthId_Steam2, SID, sizeof(SID));
 
-	for (new i = 0; i < target_count; i++)
-	{
-		decl String:SID[64];
-		GetClientAuthId(target_list[i], AuthId_Steam2, SID, sizeof(SID));
-
-		UnBanCCC(SID, client, target_list[i]);
-	}
+	UnBanCCC(SID, client, iTarget);
 
 	return Plugin_Handled;
 }
@@ -1221,36 +1021,31 @@ public Action:Command_CCCUnban(client, args)
 //Set Tag                              /////
 ////////////////////////////////////////////
 
-public Action:Command_SetTag(client, args)
+public Action Command_SetTag(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
-		PrintToServer("[CCC] Cannot use command from server console");
+		ReplyToCommand(client, "[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
 	if (args < 1)
 	{
-		PrintToChat(client, "[SM] Usage: sm_tag <tag text>");
+		ReplyToCommand(client, "[SM] Usage: sm_tag <tag text>");
 		Menu_Main(client);
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
-	decl String:arg[64];
+	char SID[64];
+	char arg[64];
 	GetCmdArgString(arg, sizeof(arg));
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
-
-	//if (arg[strlen(arg)-1] == '"')
-	//{
-	//	arg[strlen(arg)-1] = '\0';
-	//}
 
 	ReplaceString(arg, sizeof(arg), "\"", "'");
 
 	if (SetTag(SID, arg, client))
 	{
-		CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}tag{default} to: {green}%s{default}", arg);
+		CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}tag{default} to: {green}%s{default}", arg);
 	}
 
 	return Plugin_Handled;
@@ -1260,15 +1055,15 @@ public Action:Command_SetTag(client, args)
 //Clear Tag                            /////
 ////////////////////////////////////////////
 
-public Action:Command_ClearTag(client, args)
+public Action Command_ClearTag(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
-		PrintToServer("[CCC] Cannot use command from server console");
+		ReplyToCommand(client, "[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
+	char SID[64];
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	SetTag(SID, "", client);
@@ -1280,11 +1075,11 @@ public Action:Command_ClearTag(client, args)
 //Set Tag Color                        /////
 ////////////////////////////////////////////
 
-public Action:Command_SetTagColor(client, args)
+public Action Command_SetTagColor(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
-		PrintToServer("[CCC] Cannot use command from server console");
+		ReplyToCommand(client, "[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
@@ -1295,18 +1090,18 @@ public Action:Command_SetTagColor(client, args)
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
-	decl String:col[64];
+	char SID[64];
+	char col[64];
 	GetCmdArg(1, col, sizeof(col));
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	if (IsValidRGBNum(col))
 	{
-		new String:g[8];
-		new String:b[8];
+		char g[8];
+		char b[8];
 		GetCmdArg(2, g, sizeof(g));
 		GetCmdArg(3, b, sizeof(b));
-		new hex;
+		int hex;
 		hex |= ((StringToInt(col) & 0xFF) << 16);
 		hex |= ((StringToInt(g) & 0xFF) << 8);
 		hex |= ((StringToInt(b) & 0xFF) << 0);
@@ -1320,12 +1115,12 @@ public Action:Command_SetTagColor(client, args)
 		if (SetColor(SID, "tagcolor", col, client))
 		{
 			ReplaceString(col, sizeof(col), "#", "");
-			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}tag color{default} to: \x07%s#%s", col, col);
+			CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}tag color{default} to: \x07%s#%s", col, col);
 		}
 	}
 	else
 	{
-		CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
+		CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
 	}
 
 	return Plugin_Handled;
@@ -1335,15 +1130,15 @@ public Action:Command_SetTagColor(client, args)
 //Clear Tag Color                      /////
 ////////////////////////////////////////////
 
-public Action:Command_ClearTagColor(client, args)
+public Action Command_ClearTagColor(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
-		PrintToServer("[CCC] Cannot use command from server console");
+		ReplyToCommand(client, "[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
+	char SID[64];
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	SetColor(SID, "tagcolor", "", client);
@@ -1355,9 +1150,9 @@ public Action:Command_ClearTagColor(client, args)
 //Set Name Color                       /////
 ////////////////////////////////////////////
 
-public Action:Command_SetNameColor(client, args)
+public Action Command_SetNameColor(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
 		PrintToServer("[CCC] Cannot use command from server console");
 		return Plugin_Handled;
@@ -1370,18 +1165,18 @@ public Action:Command_SetNameColor(client, args)
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
-	decl String:col[64];
+	char SID[64];
+	char col[64];
 	GetCmdArg(1, col, sizeof(col));
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	if (IsValidRGBNum(col))
 	{
-		new String:g[8];
-		new String:b[8];
+		char g[8];
+		char b[8];
 		GetCmdArg(2, g, sizeof(g));
 		GetCmdArg(3, b, sizeof(b));
-		new hex;
+		int hex;
 		hex |= ((StringToInt(col) & 0xFF) << 16);
 		hex |= ((StringToInt(g) & 0xFF) << 8);
 		hex |= ((StringToInt(b) & 0xFF) << 0);
@@ -1395,12 +1190,12 @@ public Action:Command_SetNameColor(client, args)
 		if (SetColor(SID, "namecolor", col, client))
 		{
 			ReplaceString(col, sizeof(col), "#", "");
-			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}name color{default} to: \x07%s#%s", col, col);
+			CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}name color{default} to: \x07%s#%s", col, col);
 		}
 	}
 	else
 	{
-		CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
+		CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
 	}
 
 	return Plugin_Handled;
@@ -1410,15 +1205,15 @@ public Action:Command_SetNameColor(client, args)
 //Clear Name Color                     /////
 ////////////////////////////////////////////
 
-public Action:Command_ClearNameColor(client, args)
+public Action Command_ClearNameColor(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
 		PrintToServer("[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
+	char SID[64];
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	SetColor(SID, "namecolor", "", client);
@@ -1430,9 +1225,9 @@ public Action:Command_ClearNameColor(client, args)
 //Set Text Color                       /////
 ////////////////////////////////////////////
 
-public Action:Command_SetTextColor(client, args)
+public Action Command_SetTextColor(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
 		PrintToServer("[CCC] Cannot use command from server console");
 		return Plugin_Handled;
@@ -1445,18 +1240,18 @@ public Action:Command_SetTextColor(client, args)
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
-	decl String:col[64];
+	char SID[64];
+	char col[64];
 	GetCmdArg(1, col, sizeof(col));
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	if (IsValidRGBNum(col))
 	{
-		new String:g[8];
-		new String:b[8];
+		char g[8];
+		char b[8];
 		GetCmdArg(2, g, sizeof(g));
 		GetCmdArg(3, b, sizeof(b));
-		new hex;
+		int hex;
 		hex |= ((StringToInt(col) & 0xFF) << 16);
 		hex |= ((StringToInt(g) & 0xFF) << 8);
 		hex |= ((StringToInt(b) & 0xFF) << 0);
@@ -1470,12 +1265,12 @@ public Action:Command_SetTextColor(client, args)
 		if (SetColor(SID, "textcolor", col, client))
 		{
 			ReplaceString(col, sizeof(col), "#", "");
-			CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}text color{default} to: \x07%s#%s", col, col);
+			CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Successfully set your {green}text color{default} to: \x07%s#%s", col, col);
 		}
 	}
 	else
 	{
-		CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
+		CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} Invalid HEX|RGB color code given.");
 	}
 
 	return Plugin_Handled;
@@ -1485,15 +1280,15 @@ public Action:Command_SetTextColor(client, args)
 //Clear Text Color                     /////
 ////////////////////////////////////////////
 
-public Action:Command_ClearTextColor(client, args)
+public Action Command_ClearTextColor(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
 		PrintToServer("[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
-	decl String:SID[64];
+	char SID[64];
 	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
 	SetColor(SID, "textcolor", "", client);
@@ -1501,25 +1296,20 @@ public Action:Command_ClearTextColor(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_ToggleTag(client, args)
+public Action Command_ToggleTag(int client, int args)
 {
-	if (client == 0)
+	if (!client)
 	{
 		PrintToServer("[CCC] Cannot use command from server console");
 		return Plugin_Handled;
 	}
 
-	if (!HasFlag(client, Admin_Slay))
-	{
-		if (!HasFlag(client, Admin_Custom1))
-		{
-			PrintToChat(client, "[SM] You do not have access to this command.");
-			return Plugin_Handled;
-		}
-	}
+	//g_bTagToggled[client] = !g_bTagToggled[client];
+	char SID[64];
+	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
 
-	g_bTagToggled[client] = !g_bTagToggled[client];
-	CPrintToChat(client, "{green}[{red}C{green}C{blue}C{green}]{default} {green}Tag and color{default} displaying %s", g_bTagToggled[client] ? "{red}disabled{default}." : "{green}enabled{default}.");
+	ToggleCCC(SID, client);
+	CReplyToCommand(client, "{green}[{red}C{green}C{blue}C{green}]{default} {green}Tag and color{default} displaying %s", g_bTagToggled[client] ? "{red}disabled{default}." : "{green}enabled{default}.");
 
 	return Plugin_Handled;
 }
@@ -1533,7 +1323,7 @@ public Action:Command_ToggleTag(client, args)
 //  888   "   888 888        888   Y8888 Y88b. .d88P
 //  888       888 8888888888 888    Y888  "Y88888P"
 
-/*public Handle_Commands(Handle:menu, TopMenuAction:action, TopMenuObject:object_id, param1, String:buffer[], maxlength)
+/* public Handle_Commands(Handle menu, TopMenuAction action, TopMenuObject:object_id, param1, char buffer[], maxlength)
 {
 		if (action == TopMenuAction_DisplayOption)
 		{
@@ -1549,7 +1339,7 @@ public Action:Command_ToggleTag(client, args)
 		}
 }
 
-public Handle_AMenuReset(Handle:menu, TopMenuAction:action, TopMenuObject:object_id, param1, String:buffer[], maxlength)
+public Handle_AMenuReset(Handle menu, TopMenuAction action, TopMenuObject:object_id, param1, char buffer[], maxlength)
 {
 	if(action == TopMenuAction_DisplayOption)
 	{
@@ -1557,7 +1347,7 @@ public Handle_AMenuReset(Handle:menu, TopMenuAction:action, TopMenuObject:object
 	}
 	else if(action == TopMenuAction_SelectOption)
 	{
-		new Handle:MenuAReset = CreateMenu(MenuHandler_AdminReset);
+		new Handle MenuAReset = CreateMenu(MenuHandler_AdminReset);
 		SetMenuTitle(MenuAReset, "Select a Target (Reset Tag/Colors)");
 		SetMenuExitBackButton(MenuAReset, true);
 
@@ -1567,7 +1357,7 @@ public Handle_AMenuReset(Handle:menu, TopMenuAction:action, TopMenuObject:object
 	}
 }
 
-public Handle_AMenuBan(Handle:menu, TopMenuAction:action, TopMenuObject:object_id, param1, String:buffer[], maxlength)
+public Handle_AMenuBan(Handle menu, TopMenuAction action, TopMenuObject:object_id, param1, char buffer[], maxlength)
 {
 	if (action == TopMenuAction_DisplayOption)
 	{
@@ -1575,7 +1365,7 @@ public Handle_AMenuBan(Handle:menu, TopMenuAction:action, TopMenuObject:object_i
 	}
 	else if (action == TopMenuAction_SelectOption)
 	{
-		new Handle:MenuABan = CreateMenu(MenuHandler_AdminBan);
+		new Handle MenuABan = CreateMenu(MenuHandler_AdminBan);
 		SetMenuTitle(MenuABan, "Select a Target (Ban from Tag/Colors)");
 		SetMenuExitBackButton(MenuABan, true);
 
@@ -1585,7 +1375,7 @@ public Handle_AMenuBan(Handle:menu, TopMenuAction:action, TopMenuObject:object_i
 	}
 }
 
-public Handle_AMenuUnBan(Handle:menu, TopMenuAction:action, TopMenuObject:object_id, param1, String:buffer[], maxlength)
+public Handle_AMenuUnBan(Handle menu, TopMenuAction action, TopMenuObject:object_id, param1, char buffer[], maxlength)
 {
 	if(action == TopMenuAction_DisplayOption)
 	{
@@ -1595,30 +1385,30 @@ public Handle_AMenuUnBan(Handle:menu, TopMenuAction:action, TopMenuObject:object
 	{
 		AdminMenu_UnBanList(param1);
 	}
-}*/
+} */
 
-public AdminMenu_UnBanList(client)
+public void AdminMenu_UnBanList(int client)
 {
-	new Handle:MenuAUnBan = CreateMenu(MenuHandler_AdminUnBan);
-	new String:temp[64];
-	SetMenuTitle(MenuAUnBan, "Select a Target (Unban from Tag/Colors)");
-	SetMenuExitBackButton(MenuAUnBan, true);
-	new clients;
+	Menu MenuAUnBan = new Menu(MenuHandler_AdminUnBan);
+	char temp[64];
+	MenuAUnBan.SetTitle("Select a Target (Unban from Tag/Colors)");
+	MenuAUnBan.ExitBackButton = true;
+	int clients;
 
-	for (new i = 1; i <= MaxClients; i++)
+	for (int i = 1; i <= MaxClients; i++)
 	{
 		KvRewind(g_hBanFile);
 
 		if (IsClientInGame(i))
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(i, AuthId_Steam2, SID, sizeof(SID));
 
 			if (KvJumpToKey(g_hBanFile, SID, false))
 			{
-				decl String:info[64];
-				decl String:id[32];
-				decl remaining;
+				char info[64];
+				char id[32];
+				int remaining;
 				KvGetString(g_hBanFile, "length", info, sizeof(info), "0");
 				remaining = ((StringToInt(info) - GetTime()) / 60);
 
@@ -1641,7 +1431,7 @@ public AdminMenu_UnBanList(client)
 
 				//PrintToChat(client, "Added uid (%d) with info (%s)", id, info);
 
-				AddMenuItem(MenuAUnBan, id, info);
+				MenuAUnBan.AddItem(id, info);
 
 				clients++;
 			}
@@ -1651,42 +1441,40 @@ public AdminMenu_UnBanList(client)
 	if (!clients)
 	{
 		Format(temp, sizeof(temp), "No banned clients");
-		AddMenuItem(MenuAUnBan, "0", temp, ITEMDRAW_DISABLED);
+		MenuAUnBan.AddItem("0", temp, ITEMDRAW_DISABLED);
 	}
 
-	DisplayMenu(MenuAUnBan, client, MENU_TIME_FOREVER);
+	MenuAUnBan.Display(client, MENU_TIME_FOREVER);
 }
 
-public MenuHandler_AdminUnBan(Handle:MenuAUnBan, MenuAction:action, param1, param2)
+public int MenuHandler_AdminUnBan(Menu MenuAUnBan, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAUnBan);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		decl String:SID[64];
-		GetMenuItem(MenuAUnBan, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		char SID[64];
+		MenuAUnBan.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 		target = GetClientOfUserId(userid);
 
-		PrintToChat(param1, "%s", Selected);
-
-		if (target == 0)
+		if (!target)
 		{
-			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
+			CReplyToCommand(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 
-			/*if (g_hAdminMenu != INVALID_HANDLE)
+			/*if (g_hAdminMenu != null)
 			{
 				DisplayTopMenu(g_hAdminMenu, param1, TopMenuPosition_LastCategory);
 			}*/
@@ -1698,7 +1486,7 @@ public MenuHandler_AdminUnBan(Handle:MenuAUnBan, MenuAction:action, param1, para
 
 			UnBanCCC(SID, param1, target);
 
-			/*if (g_hAdminMenu != INVALID_HANDLE)
+			/*if (g_hAdminMenu != null)
 			{
 				DisplayTopMenu(g_hAdminMenu, param1, TopMenuPosition_LastCategory);
 				return;
@@ -1707,48 +1495,48 @@ public MenuHandler_AdminUnBan(Handle:MenuAUnBan, MenuAction:action, param1, para
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public Menu_Main(client)
+public void Menu_Main(int client)
 {
 	if (IsVoteInProgress())
-	{
 		return;
-	}
 
-	new Handle:MenuMain = CreateMenu(MenuHandler_Main);
-	SetMenuTitle(MenuMain, "Chat Tags & Colors");
+	Menu MenuMain = new Menu(MenuHandler_Main);
+	MenuMain.SetTitle("Chat Tags & Colors");
 
-	AddMenuItem(MenuMain, "Current", "View Current Settings");
-	AddMenuItem(MenuMain, "Tag", "Tag Options");
-	AddMenuItem(MenuMain, "Name", "Name Options");
-	AddMenuItem(MenuMain, "Chat", "Chat Options");
+	MenuMain.AddItem("Current", "View Current Settings");
+	MenuMain.AddItem("Tag", "Tag Options");
+	MenuMain.AddItem("Name", "Name Options");
+	MenuMain.AddItem("Chat", "Chat Options");
 
 	if (g_bWaitingForChatInput[client])
 	{
-		AddMenuItem(MenuMain, "CancelCInput", "Cancel Chat Input");
+		MenuMain.AddItem("CancelCInput", "Cancel Chat Input");
 	}
 
 	if (HasFlag(client, Admin_Slay) || HasFlag(client, Admin_Cheats))
 	{
-		AddMenuItem(MenuMain, "", "", ITEMDRAW_SPACER);
-		AddMenuItem(MenuMain, "Admin", "Administrative Options");
+		MenuMain.AddItem("", "", ITEMDRAW_SPACER);
+		MenuMain.AddItem("Admin", "Administrative Options");
 	}
 
-	DisplayMenu(MenuMain, client, MENU_TIME_FOREVER);
+	MenuMain.Display(client, MENU_TIME_FOREVER);
 }
 
-public MenuHandler_Main(Handle:MenuMain, MenuAction:action, param1, param2)
+public int MenuHandler_Main(Menu MenuMain, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuMain);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
+		char Selected[32];
 		GetMenuItem(MenuMain, param2, Selected, sizeof(Selected));
 
 		if (StrEqual(Selected, "Tag"))
@@ -1776,40 +1564,40 @@ public MenuHandler_Main(Handle:MenuMain, MenuAction:action, param1, param2)
 		}
 		else if (StrEqual(Selected, "Current"))
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 			KvRewind(g_hConfigFile);
 
 			if (KvJumpToKey(g_hConfigFile, SID))
 			{
-				new Handle:hMenuCurrent = CreateMenu(MenuHandler_Current);
-				decl String:sTag[32];
-				decl String:sTagColor[32];
-				decl String:sNameColor[32];
-				decl String:sTextColor[32];
-				decl String:sTagF[64];
-				decl String:sTagColorF[64];
-				decl String:sNameColorF[64];
-				decl String:sTextColorF[64];
-				SetMenuTitle(hMenuCurrent, "Current Settings:");
-				SetMenuExitBackButton(hMenuCurrent, true);
+				Menu hMenuCurrent = new Menu(MenuHandler_Current);
+				char sTag[32];
+				char sTagColor[32];
+				char sNameColor[32];
+				char sTextColor[32];
+				char sTagF[64];
+				char sTagColorF[64];
+				char sNameColorF[64];
+				char sTextColorF[64];
+				hMenuCurrent.SetTitle("Current Settings:");
+				hMenuCurrent.ExitBackButton = true;
 
 				KvGetString(g_hConfigFile, "tag", sTag, sizeof(sTag), "");
 				KvGetString(g_hConfigFile, "tagcolor", sTagColor, sizeof(sTagColor), "");
 				KvGetString(g_hConfigFile, "namecolor", sNameColor, sizeof(sNameColor), "");
 				KvGetString(g_hConfigFile, "textcolor", sTextColor, sizeof(sTextColor), "");
 
-				Format(sTagF, sizeof(sTagF), "Current sTag: %s", sTag);
-				Format(sTagColorF, sizeof(sTagColorF), "Current sTag Color: %s", sTagColor);
+				Format(sTagF, sizeof(sTagF), "Current Tag: %s", sTag);
+				Format(sTagColorF, sizeof(sTagColorF), "Current Tag Color: %s", sTagColor);
 				Format(sNameColorF, sizeof(sNameColorF), "Current Name Color: %s", sNameColor);
 				Format(sTextColorF, sizeof(sTextColorF), "Current Text Color: %s", sTextColor);
 
-				AddMenuItem(hMenuCurrent, "sTag", sTagF, ITEMDRAW_DISABLED);
-				AddMenuItem(hMenuCurrent, "sTagColor", sTagColorF, ITEMDRAW_DISABLED);
-				AddMenuItem(hMenuCurrent, "sNameColor", sNameColorF, ITEMDRAW_DISABLED);
-				AddMenuItem(hMenuCurrent, "sTextColor", sTextColorF, ITEMDRAW_DISABLED);
+				hMenuCurrent.AddItem("sTag", sTagF, ITEMDRAW_DISABLED);
+				hMenuCurrent.AddItem("sTagColor", sTagColorF, ITEMDRAW_DISABLED);
+				hMenuCurrent.AddItem("sNameColor", sNameColorF, ITEMDRAW_DISABLED);
+				hMenuCurrent.AddItem("sTextColor", sTextColorF, ITEMDRAW_DISABLED);
 
-				DisplayMenu(hMenuCurrent, param1, MENU_TIME_FOREVER);
+				hMenuCurrent.Display(param1, MENU_TIME_FOREVER);
 
 			}
 			else
@@ -1822,143 +1610,140 @@ public MenuHandler_Main(Handle:MenuMain, MenuAction:action, param1, param2)
 			PrintToChat(param1, "congrats you broke it");
 		}
 	}
+
+	return 0;
 }
 
-public MenuHandler_Current(Handle:hMenuCurrent, MenuAction:action, param1, param2)
+public int MenuHandler_Current(Menu hMenuCurrent, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(hMenuCurrent);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Main(param1);
-		return;
+		return 0;
 	}
+
+	return 0;
 }
 
-public Menu_Admin(client)
+public void Menu_Admin(int client)
 {
 	if (IsVoteInProgress())
-	{
 		return;
-	}
 
-	new Handle:MenuAdmin = CreateMenu(MenuHandler_Admin);
-	SetMenuTitle(MenuAdmin, "Chat Tags & Colors Admin");
-	SetMenuExitBackButton(MenuAdmin, true);
+	Menu MenuAdmin = new Menu(MenuHandler_Admin);
+	MenuAdmin.SetTitle("Chat Tags & Colors Admin");
+	MenuAdmin.ExitBackButton = true;
 
-	AddMenuItem(MenuAdmin, "Reset", "Reset a client's Tag & Colors");
-	AddMenuItem(MenuAdmin, "Ban", "Reset and Ban a client from the Tag & Colors system");
-	AddMenuItem(MenuAdmin, "Unban", "Unban a client from the Tag & Colors system");
+	MenuAdmin.AddItem("Reset", "Reset a client's Tag & Colors");
+	MenuAdmin.AddItem("Ban", "Ban a client from the Tag & Colors system");
+	MenuAdmin.AddItem("Unban", "Unban a client from the Tag & Colors system");
 
 	if (HasFlag(client, Admin_Cheats))
 	{
-		AddMenuItem(MenuAdmin, "ForceTag", "Forcefully change a client's Tag");
-		AddMenuItem(MenuAdmin, "ForceTagColor", "Forcefully change a client's Tag Color");
-		AddMenuItem(MenuAdmin, "ForceNameColor", "Forcefully change a client's Name Color");
-		AddMenuItem(MenuAdmin, "ForceTextColor", "Forcefully change a client's Chat Color");
+		MenuAdmin.AddItem("ForceTag", "Forcefully change a client's Tag");
+		MenuAdmin.AddItem("ForceTagColor", "Forcefully change a client's Tag Color");
+		MenuAdmin.AddItem("ForceNameColor", "Forcefully change a client's Name Color");
+		MenuAdmin.AddItem("ForceTextColor", "Forcefully change a client's Chat Color");
 	}
 
-	if (g_bWaitingForChatInput[client])
-	{
-		AddMenuItem(MenuAdmin, "CancelCInput", "Cancel Chat Input");
-	}
-
-	DisplayMenu(MenuAdmin, client, MENU_TIME_FOREVER);
+	MenuAdmin.Display(client, MENU_TIME_FOREVER);
 }
 
-public MenuHandler_Admin(Handle:MenuAdmin, MenuAction:action, param1, param2)
+public int MenuHandler_Admin(Menu MenuAdmin, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAdmin);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Main(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		GetMenuItem(MenuAdmin, param2, Selected, sizeof(Selected));
+		char Selected[32];
+		MenuAdmin.GetItem(param2, Selected, sizeof(Selected));
 
 		if (StrEqual(Selected, "Reset"))
 		{
-			new Handle:MenuAReset = CreateMenu(MenuHandler_AdminReset);
-			SetMenuTitle(MenuAReset, "Select a Target (Reset Tag/Colors)");
-			SetMenuExitBackButton(MenuAReset, true);
+			Menu MenuAReset = new Menu(MenuHandler_AdminReset);
+			MenuAReset.SetTitle("Select a Target (Reset Tag/Colors)");
+			MenuAReset.ExitBackButton = true;
 
 			AddTargetsToMenu2(MenuAReset, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-			DisplayMenu(MenuAReset, param1, MENU_TIME_FOREVER);
-			return;
+			MenuAReset.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 		else if (StrEqual(Selected, "Ban"))
 		{
-			new Handle:MenuABan = CreateMenu(MenuHandler_AdminBan);
-			SetMenuTitle(MenuABan, "Select a Target (Ban from Tag/Colors)");
-			SetMenuExitBackButton(MenuABan, true);
+			Menu MenuABan = new Menu(MenuHandler_AdminBan);
+			MenuABan.SetTitle("Select a Target (Ban from Tag/Colors)");
+			MenuABan.ExitBackButton = true;
 
 			AddTargetsToMenu2(MenuABan, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-			DisplayMenu(MenuABan, param1, MENU_TIME_FOREVER);
-			return;
+			MenuABan.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 		else if (StrEqual(Selected, "Unban"))
 		{
 			AdminMenu_UnBanList(param1);
-			return;
+			return 0;
 		}
 		else if (StrEqual(Selected, "ForceTag"))
 		{
-			new Handle:MenuAFTag = CreateMenu(MenuHandler_AdminForceTag);
-			SetMenuTitle(MenuAFTag, "Select a Target (Force Tag)");
-			SetMenuExitBackButton(MenuAFTag, true);
+			Menu MenuAFTag = new Menu(MenuHandler_AdminForceTag);
+			MenuAFTag.SetTitle("Select a Target (Force Tag)");
+			MenuAFTag.ExitBackButton = true;
 
 			AddTargetsToMenu2(MenuAFTag, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-			DisplayMenu(MenuAFTag, param1, MENU_TIME_FOREVER);
-			return;
+			MenuAFTag.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 		else if (StrEqual(Selected, "ForceTagColor"))
 		{
-			new Handle:MenuAFTColor = CreateMenu(MenuHandler_AdminForceTagColor);
-			SetMenuTitle(MenuAFTColor, "Select a Target (Force Tag Color)");
-			SetMenuExitBackButton(MenuAFTColor, true);
+			Menu MenuAFTColor = new Menu(MenuHandler_AdminForceTagColor);
+			MenuAFTColor.SetTitle("Select a Target (Force Tag Color)");
+			MenuAFTColor.ExitBackButton = true;
 
 			AddTargetsToMenu2(MenuAFTColor, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-			DisplayMenu(MenuAFTColor, param1, MENU_TIME_FOREVER);
-			return;
+			MenuAFTColor.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 		else if (StrEqual(Selected, "ForceNameColor"))
 		{
-			new Handle:MenuAFNColor = CreateMenu(MenuHandler_AdminForceNameColor);
-			SetMenuTitle(MenuAFNColor, "Select a Target (Force Name Color)");
-			SetMenuExitBackButton(MenuAFNColor, true);
+			Menu MenuAFNColor = new Menu(MenuHandler_AdminForceNameColor);
+			MenuAFNColor.SetTitle("Select a Target (Force Name Color)");
+			MenuAFNColor.ExitBackButton = true;
 
 			AddTargetsToMenu2(MenuAFNColor, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-			DisplayMenu(MenuAFNColor, param1, MENU_TIME_FOREVER);
-			return;
+			MenuAFNColor.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 		else if (StrEqual(Selected, "ForceTextColor"))
 		{
-			new Handle:MenuAFTeColor = CreateMenu(MenuHandler_AdminForceTextColor);
-			SetMenuTitle(MenuAFTeColor, "Select a Target (Force Text Color)");
-			SetMenuExitBackButton(MenuAFTeColor, true);
+			Menu MenuAFTeColor = new Menu(MenuHandler_AdminForceTextColor);
+			MenuAFTeColor.SetTitle("Select a Target (Force Text Color)");
+			MenuAFTeColor.ExitBackButton = true;
 
 			AddTargetsToMenu2(MenuAFTeColor, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-			DisplayMenu(MenuAFTeColor, param1, MENU_TIME_FOREVER);
-			return;
+			MenuAFTeColor.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 		else if (StrEqual(Selected, "CancelCInput"))
 		{
@@ -1974,36 +1759,38 @@ public MenuHandler_Admin(Handle:MenuAdmin, MenuAction:action, param1, param2)
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminReset(Handle:MenuAReset, MenuAction:action, param1, param2)
+public int MenuHandler_AdminReset(Menu MenuAReset, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAReset);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		decl String:SID[64];
-		GetMenuItem(MenuAReset, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		char SID[64];
+		MenuAReset.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 		target = GetClientOfUserId(userid);
 
-		if (target == 0)
+		if (!target)
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 
-			/*if (g_hAdminMenu != INVALID_HANDLE)
+			/*if (g_hAdminMenu != null)
 			{
 				DisplayTopMenu(g_hAdminMenu, param1, TopMenuPosition_LastCategory);
 				return;
@@ -2020,36 +1807,38 @@ public MenuHandler_AdminReset(Handle:MenuAReset, MenuAction:action, param1, para
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminBan(Handle:MenuABan, MenuAction:action, param1, param2)
+public int MenuHandler_AdminBan(Menu MenuABan, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuABan);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		decl String:SID[64];
-		GetMenuItem(MenuABan, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		char SID[64];
+		MenuABan.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 		target = GetClientOfUserId(userid);
 
-		if (target == 0)
+		if (!target)
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 
-			/*if (g_hAdminMenu != INVALID_HANDLE)
+			/*if (g_hAdminMenu != null)
 			{
 				DisplayTopMenu(g_hAdminMenu, param1, TopMenuPosition_LastCategory);
 				return;
@@ -2061,53 +1850,56 @@ public MenuHandler_AdminBan(Handle:MenuABan, MenuAction:action, param1, param2)
 			GetClientAuthId(target, AuthId_Steam2, SID, sizeof(SID));
 			g_iATarget[param1] = target;
 			g_sATargetSID[param1] = SID;
-			new Handle:MenuABTime = CreateMenu(MenuHandler_AdminBanTime);
-			SetMenuTitle(MenuABTime, "Select Ban Length");
-			SetMenuExitBackButton(MenuABTime, true);
 
-			AddMenuItem(MenuABTime, "10", "10 Minutes");
-			AddMenuItem(MenuABTime, "30", "30 Minutes");
-			AddMenuItem(MenuABTime, "60", "1 Hour");
-			AddMenuItem(MenuABTime, "1440", "1 Day");
-			AddMenuItem(MenuABTime, "10080", "1 Week");
-			AddMenuItem(MenuABTime, "40320", "1 Month");
-			AddMenuItem(MenuABTime, "0", "Permanent");
+			Menu MenuABTime = new Menu(MenuHandler_AdminBanTime);
+			MenuABTime.SetTitle("Select Ban Length");
+			MenuABTime.ExitBackButton = true;
 
-			DisplayMenu(MenuABTime, param1, MENU_TIME_FOREVER);
+			MenuABTime.AddItem("10", "10 Minutes");
+			MenuABTime.AddItem("30", "30 Minutes");
+			MenuABTime.AddItem("60", "1 Hour");
+			MenuABTime.AddItem("1440", "1 Day");
+			MenuABTime.AddItem("10080", "1 Week");
+			MenuABTime.AddItem("40320", "1 Month");
+			MenuABTime.AddItem("0", "Permanent");
+
+			MenuABTime.Display(param1, MENU_TIME_FOREVER);
 		}
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminBanTime(Handle:MenuABTime, MenuAction:action, param1, param2)
+public int MenuHandler_AdminBanTime(Menu MenuABTime, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuABTime);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
-		new Handle:MenuABan = CreateMenu(MenuHandler_AdminBan);
-		SetMenuTitle(MenuABan, "Select a Target (Ban from Tag/Colors)");
-		SetMenuExitBackButton(MenuABan, true);
+		Menu MenuABan = new Menu(MenuHandler_AdminBan);
+		MenuABan.SetTitle("Select a Target (Ban from Tag/Colors)");
+		MenuABan.ExitBackButton = true;
 
 		AddTargetsToMenu2(MenuABan, 0, COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_CONNECTED);
 
-		DisplayMenu(MenuABan, param1, MENU_TIME_FOREVER);
-		return;
+		MenuABan.Display(param1, MENU_TIME_FOREVER);
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[128];
-		GetMenuItem(MenuABTime, param2, Selected, sizeof(Selected));
+		char Selected[128];
+		MenuABTime.GetItem(param2, Selected, sizeof(Selected));
 
-		if (g_iATarget[param1] == 0)
+		if (!g_iATarget[param1])
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 
-			/*if (g_hAdminMenu != INVALID_HANDLE)
+			/*if (g_hAdminMenu != null)
 			{
 				DisplayTopMenu(g_hAdminMenu, param1, TopMenuPosition_LastCategory);
 				return;
@@ -2118,7 +1910,7 @@ public MenuHandler_AdminBanTime(Handle:MenuABTime, MenuAction:action, param1, pa
 
 		BanCCC(g_sATargetSID[param1], param1, g_iATarget[param1], Selected);
 
-		/*if (g_hAdminMenu != INVALID_HANDLE)
+		/*if (g_hAdminMenu != null)
 		{
 			DisplayTopMenu(g_hAdminMenu, param1, TopMenuPosition_LastCategory);
 			return;
@@ -2126,32 +1918,34 @@ public MenuHandler_AdminBanTime(Handle:MenuABTime, MenuAction:action, param1, pa
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminForceTag(Handle:MenuAFTag, MenuAction:action, param1, param2)
+public int MenuHandler_AdminForceTag(Menu MenuAFTag, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAFTag);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		decl String:SID[64];
-		GetMenuItem(MenuAFTag, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		char SID[64];
+		MenuAFTag.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 		target = GetClientOfUserId(userid);
 
-		if (target == 0)
+		if (!target)
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 			Menu_Admin(param1);
@@ -2163,44 +1957,46 @@ public MenuHandler_AdminForceTag(Handle:MenuAFTag, MenuAction:action, param1, pa
 			g_sATargetSID[param1] = SID;
 			g_bWaitingForChatInput[param1] = true;
 			g_sInputType[param1] = "MenuForceTag";
-			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's tag{default} to be.", target);
+			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's{default} tag to be.", target);
 		}
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminForceTagColor(Handle:MenuAFTColor, MenuAction:action, param1, param2)
+public int MenuHandler_AdminForceTagColor(Menu MenuAFTColor, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAFTColor);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		GetMenuItem(MenuAFTColor, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		MenuAFTColor.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 
 		target = GetClientOfUserId(userid);
 
-		if (target == 0)
+		if (!target)
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 			Menu_Admin(param1);
 		}
 		else
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(target, AuthId_Steam2, SID, sizeof(SID));
 
 			g_iATarget[param1] = target;
@@ -2208,37 +2004,39 @@ public MenuHandler_AdminForceTagColor(Handle:MenuAFTColor, MenuAction:action, pa
 			g_bWaitingForChatInput[param1] = true;
 			g_sInputType[param1] = "MenuForceTagColor";
 
-			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's tag color{default} to be (#{red}RR{green}GG{blue}BB{default} HEX only!).", target);
+			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's{default} tag color to be (#{red}RR{green}GG{blue}BB{default} HEX only!).", target);
 		}
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminForceNameColor(Handle:MenuAFNColor, MenuAction:action, param1, param2)
+public int MenuHandler_AdminForceNameColor(Menu MenuAFNColor, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAFNColor);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		decl String:SID[64];
-		GetMenuItem(MenuAFNColor, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		char SID[64];
+		MenuAFNColor.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 		target = GetClientOfUserId(userid);
 
-		if (target == 0)
+		if (!target)
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 			Menu_Admin(param1);
@@ -2250,37 +2048,39 @@ public MenuHandler_AdminForceNameColor(Handle:MenuAFNColor, MenuAction:action, p
 			g_sATargetSID[param1] = SID;
 			g_bWaitingForChatInput[param1] = true;
 			g_sInputType[param1] = "MenuForceNameColor";
-			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's name color{default} to be (#{red}RR{green}GG{blue}BB{default} HEX only!).", target);
+			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's{default} name color to be (#{red}RR{green}GG{blue}BB{default} HEX only!).", target);
 		}
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_AdminForceTextColor(Handle:MenuAFTeColor, MenuAction:action, param1, param2)
+public int MenuHandler_AdminForceTextColor(Menu MenuAFTeColor, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuAFTeColor);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Admin(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		decl String:SID[64];
-		GetMenuItem(MenuAFTeColor, param2, Selected, sizeof(Selected));
-		new target;
-		new userid = StringToInt(Selected);
+		char Selected[32];
+		char SID[64];
+		MenuAFTeColor.GetItem(param2, Selected, sizeof(Selected));
+		int target;
+		int userid = StringToInt(Selected);
 		target = GetClientOfUserId(userid);
 
-		if (target == 0)
+		if (!target)
 		{
 			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Player no longer available.");
 			Menu_Admin(param1);
@@ -2292,55 +2092,55 @@ public MenuHandler_AdminForceTextColor(Handle:MenuAFTeColor, MenuAction:action, 
 			g_sATargetSID[param1] = SID;
 			g_bWaitingForChatInput[param1] = true;
 			g_sInputType[param1] = "MenuForceTextColor";
-			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's text color{default} to be (#{red}RR{green}GG{blue}BB{default} HEX only!).", target);
+			CPrintToChat(param1, "{green}[{red}C{green}C{blue}C{green}-ADMIN]{default} Please enter what you want {green}%N's{default} text color to be (#{red}RR{green}GG{blue}BB{default} HEX only!).", target);
 		}
 
 		Menu_Admin(param1);
 	}
+
+	return 0;
 }
 
-public Menu_TagPrefs(client)
+public void Menu_TagPrefs(int client)
 {
 	if (IsVoteInProgress())
-	{
 		return;
-	}
 
-	new Handle:MenuTPrefs = CreateMenu(MenuHandler_TagPrefs);
-	SetMenuTitle(MenuTPrefs, "Tag Options:");
-	SetMenuExitBackButton(MenuTPrefs, true);
+	Menu MenuTPrefs = new Menu(MenuHandler_TagPrefs);
+	MenuTPrefs.SetTitle("Tag Options:");
+	MenuTPrefs.ExitBackButton = true;
 
-	AddMenuItem(MenuTPrefs, "Reset", "Clear Tag");
-	AddMenuItem(MenuTPrefs, "ResetColor", "Clear Tag Color");
-	AddMenuItem(MenuTPrefs, "ChangeTag", "Change Tag (Chat input)");
-	AddMenuItem(MenuTPrefs, "Color", "Change Tag Color");
-	AddMenuItem(MenuTPrefs, "ColorTag", "Change Tag Color (Chat input)");
+	MenuTPrefs.AddItem("Reset", "Clear Tag");
+	MenuTPrefs.AddItem("ResetColor", "Clear Tag Color");
+	MenuTPrefs.AddItem("ChangeTag", "Change Tag (Chat input)");
+	MenuTPrefs.AddItem("Color", "Change Tag Color");
+	MenuTPrefs.AddItem("ColorTag", "Change Tag Color (Chat input)");
 
-	DisplayMenu(MenuTPrefs, client, MENU_TIME_FOREVER);
+	MenuTPrefs.Display(client, MENU_TIME_FOREVER);
 }
 
-public MenuHandler_TagPrefs(Handle:MenuTPrefs, MenuAction:action, param1, param2)
+public int MenuHandler_TagPrefs(Menu MenuTPrefs, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuTPrefs);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Main(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		GetMenuItem(MenuTPrefs, param2, Selected, sizeof(Selected));
+		char Selected[32];
+		MenuTPrefs.GetItem(param2, Selected, sizeof(Selected));
 
 		if (StrEqual(Selected, "Reset"))
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 			SetTag(SID, "", param1);
@@ -2349,7 +2149,7 @@ public MenuHandler_TagPrefs(Handle:MenuTPrefs, MenuAction:action, param1, param2
 		}
 		else if (StrEqual(Selected, "ResetColor"))
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 			if (SetColor(SID, "tagcolor", "", param1))
@@ -2369,65 +2169,65 @@ public MenuHandler_TagPrefs(Handle:MenuTPrefs, MenuAction:action, param1, param2
 		}
 		else
 		{
-			new Handle:ColorsMenu = CreateMenu(MenuHandler_TagColorSub);
-			decl String:info[64];
-			SetMenuTitle(ColorsMenu, "Pick a color:");
-			SetMenuExitBackButton(ColorsMenu, true);
+			Menu ColorsMenu = new Menu(MenuHandler_TagColorSub);
+			char info[64];
+			ColorsMenu.SetTitle("Pick a color:");
+			ColorsMenu.ExitBackButton = true;
 
-			for (new i = 0; i < 120; i++)
+			for (int i = 0; i < 120; i++)
 			{
 				Format(info, sizeof(info), "%s (#%s)", g_sColorsArray[i][0], g_sColorsArray[i][1]);
-				AddMenuItem(ColorsMenu, g_sColorsArray[i][1], info);
+				ColorsMenu.AddItem(g_sColorsArray[i][1], info);
 			}
 
-			DisplayMenu(ColorsMenu, param1, MENU_TIME_FOREVER);
-			return;
+			ColorsMenu.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 
 		Menu_Main(param1);
 	}
+
+	return 0;
 }
 
-public Menu_NameColor(client)
+public void Menu_NameColor(int client)
 {
 	if (IsVoteInProgress())
-	{
 		return;
-	}
 
-	new Handle:MenuNColor = CreateMenu(MenuHandler_NameColor);
-	SetMenuTitle(MenuNColor, "Name Options:");
-	SetMenuExitBackButton(MenuNColor, true);
+	Menu MenuNColor = new Menu(MenuHandler_NameColor);
+	MenuNColor.SetTitle("Name Options:");
+	MenuNColor.ExitBackButton = true;
 
-	AddMenuItem(MenuNColor, "ResetColor", "Clear Name Color");
-	AddMenuItem(MenuNColor, "Color", "Change Name Color");
-	AddMenuItem(MenuNColor, "ColorName", "Change Name Color (Chat input)");
+	MenuNColor.AddItem("ResetColor", "Clear Name Color");
+	MenuNColor.AddItem("Color", "Change Name Color");
+	MenuNColor.AddItem("ColorName", "Change Name Color (Chat input)");
 
-	DisplayMenu(MenuNColor, client, MENU_TIME_FOREVER);
+	MenuNColor.Display(client, MENU_TIME_FOREVER);
 }
 
-public MenuHandler_NameColor(Handle:MenuNColor, MenuAction:action, param1, param2)
+public int MenuHandler_NameColor(Menu MenuNColor, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuNColor);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Main(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		GetMenuItem(MenuNColor, param2, Selected, sizeof(Selected));
+		char Selected[32];
+		MenuNColor.GetItem(param2, Selected, sizeof(Selected));
 
 		if (StrEqual(Selected, "ResetColor"))
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 			if (SetColor(SID, "namecolor", "", param1))
@@ -2441,72 +2241,72 @@ public MenuHandler_NameColor(Handle:MenuNColor, MenuAction:action, param1, param
 		}
 		else
 		{
-			new Handle:ColorsMenu = CreateMenu(MenuHandler_NameColorSub);
-			decl String:info[64];
-			decl String:SID[64];
+			Menu ColorsMenu = new Menu(MenuHandler_NameColorSub);
+			char info[64];
+			char SID[64];
 			GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
-			SetMenuTitle(ColorsMenu, "Pick a color:");
-			SetMenuExitBackButton(ColorsMenu, true);
+			ColorsMenu.SetTitle("Pick a color:");
+			ColorsMenu.ExitBackButton = true;
 
-			for (new i = 0; i < 120; i++)
+			for (int i = 0; i < 120; i++)
 			{
 				Format(info, sizeof(info), "%s (#%s)", g_sColorsArray[i][0], g_sColorsArray[i][1]);
-				AddMenuItem(ColorsMenu, g_sColorsArray[i][1], info);
+				ColorsMenu.AddItem(g_sColorsArray[i][1], info);
 			}
 
-			if (HasFlag(param1, Admin_Cheats) || StrEqual(SID, "STEAM_0:0:50540848", true))
+			if (HasFlag(param1, Admin_Cheats))
 			{
-				AddMenuItem(ColorsMenu, "X", "X");
+				ColorsMenu.AddItem("X", "X");
 			}
 
-			DisplayMenu(ColorsMenu, param1, MENU_TIME_FOREVER);
-			return;
+			ColorsMenu.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 
 		Menu_Main(param1);
 	}
+
+	return 0;
 }
 
-public Menu_ChatColor(client)
+public void Menu_ChatColor(int client)
 {
 	if (IsVoteInProgress())
-	{
 		return;
-	}
 
-	new Handle:MenuCColor = CreateMenu(MenuHandler_ChatColor);
-	SetMenuTitle(MenuCColor, "Chat Options:");
-	SetMenuExitBackButton(MenuCColor, true);
+	Menu MenuCColor = new Menu(MenuHandler_ChatColor);
+	MenuCColor.SetTitle("Chat Options:");
+	MenuCColor.ExitBackButton = true;
 
-	AddMenuItem(MenuCColor, "ResetColor", "Clear Chat Text Color");
-	AddMenuItem(MenuCColor, "Color", "Change Chat Text Color");
-	AddMenuItem(MenuCColor, "ColorText", "Change Chat Text Color (Chat input)");
+	MenuCColor.AddItem("ResetColor", "Clear Chat Text Color");
+	MenuCColor.AddItem("Color", "Change Chat Text Color");
+	MenuCColor.AddItem("ColorText", "Change Chat Text Color (Chat input)");
 
-	DisplayMenu(MenuCColor, client, MENU_TIME_FOREVER);
+	MenuCColor.Display(client, MENU_TIME_FOREVER);
 }
 
-public MenuHandler_ChatColor(Handle:MenuCColor, MenuAction:action, param1, param2)
+public int MenuHandler_ChatColor(Menu MenuCColor, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuCColor);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_Main(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:Selected[32];
-		GetMenuItem(MenuCColor, param2, Selected, sizeof(Selected));
+		char Selected[32];
+		MenuCColor.GetItem(param2, Selected, sizeof(Selected));
 
-		if(StrEqual(Selected, "ResetColor"))
+		if (StrEqual(Selected, "ResetColor"))
 		{
-			decl String:SID[64];
+			char SID[64];
 			GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 			if (SetColor(SID, "textcolor", "", param1))
@@ -2520,45 +2320,47 @@ public MenuHandler_ChatColor(Handle:MenuCColor, MenuAction:action, param1, param
 		}
 		else
 		{
-			new Handle:ColorsMenu = CreateMenu(MenuHandler_ChatColorSub);
-			decl String:info[64];
-			SetMenuTitle(ColorsMenu, "Pick a color:");
-			SetMenuExitBackButton(ColorsMenu, true);
+			Menu ColorsMenu = new Menu(MenuHandler_ChatColorSub);
+			char info[64];
+			ColorsMenu.SetTitle("Pick a color:");
+			ColorsMenu.ExitBackButton = true;
 
-			for (new i = 0; i < 120; i++)
+			for (int i = 0; i < 120; i++)
 			{
 				Format(info, sizeof(info), "%s (#%s)", g_sColorsArray[i][0], g_sColorsArray[i][1]);
-				AddMenuItem(ColorsMenu, g_sColorsArray[i][1], info);
+				ColorsMenu.AddItem(g_sColorsArray[i][1], info);
 			}
 
-			DisplayMenu(ColorsMenu, param1, MENU_TIME_FOREVER);
-			return;
+			ColorsMenu.Display(param1, MENU_TIME_FOREVER);
+			return 0;
 		}
 
 		Menu_Main(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_TagColorSub(Handle:MenuTCSub, MenuAction:action, param1, param2)
+public int MenuHandler_TagColorSub(Menu MenuTCSub, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuTCSub);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_TagPrefs(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:SID[64];
-		decl String:Selected[64];
-		decl String:SelectedFinal[64];
-		GetMenuItem(MenuTCSub, param2, Selected, sizeof(Selected));
+		char SID[64];
+		char Selected[64];
+		char SelectedFinal[64];
+		MenuTCSub.GetItem(param2, Selected, sizeof(Selected));
 		GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 		Format(SelectedFinal, sizeof(SelectedFinal), "#%s", Selected);
@@ -2568,28 +2370,30 @@ public MenuHandler_TagColorSub(Handle:MenuTCSub, MenuAction:action, param1, para
 
 		Menu_TagPrefs(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_NameColorSub(Handle:MenuNCSub, MenuAction:action, param1, param2)
+public int MenuHandler_NameColorSub(Menu MenuNCSub, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuNCSub);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_NameColor(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:SID[64];
-		decl String:Selected[64];
-		decl String:SelectedFinal[64];
-		GetMenuItem(MenuNCSub, param2, Selected, sizeof(Selected));
+		char SID[64];
+		char Selected[64];
+		char SelectedFinal[64];
+		MenuNCSub.GetItem(param2, Selected, sizeof(Selected));
 		GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 		Format(SelectedFinal, sizeof(SelectedFinal), "#%s", Selected);
@@ -2599,28 +2403,30 @@ public MenuHandler_NameColorSub(Handle:MenuNCSub, MenuAction:action, param1, par
 
 		Menu_NameColor(param1);
 	}
+
+	return 0;
 }
 
-public MenuHandler_ChatColorSub(Handle:MenuCCSub, MenuAction:action, param1, param2)
+public int MenuHandler_ChatColorSub(Menu MenuCCSub, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_End)
 	{
 		CloseHandle(MenuCCSub);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
 	{
 		Menu_ChatColor(param1);
-		return;
+		return 0;
 	}
 
 	if (action == MenuAction_Select)
 	{
-		decl String:SID[64];
-		decl String:Selected[64];
-		decl String:SelectedFinal[64];
-		GetMenuItem(MenuCCSub, param2, Selected, sizeof(Selected));
+		char SID[64];
+		char Selected[64];
+		char SelectedFinal[64];
+		MenuCCSub.GetItem(param2, Selected, sizeof(Selected));
 		GetClientAuthId(param1, AuthId_Steam2, SID, sizeof(SID));
 
 		Format(SelectedFinal, sizeof(SelectedFinal), "#%s", Selected);
@@ -2630,6 +2436,8 @@ public MenuHandler_ChatColorSub(Handle:MenuCCSub, MenuAction:action, param1, par
 
 		Menu_ChatColor(param1);
 	}
+
+	return 0;
 }
 
 //  88888888888     d8888  .d8888b.        .d8888b.  8888888888 88888888888 88888888888 8888888 888b    888  .d8888b.
@@ -2641,7 +2449,7 @@ public MenuHandler_ChatColorSub(Handle:MenuCCSub, MenuAction:action, param1, par
 //      888   d8888888888 Y88b  d88P      Y88b  d88P 888            888         888       888   888   Y8888 Y88b  d88P
 //      888  d88P     888  "Y8888P88       "Y8888P"  8888888888     888         888     8888888 888    Y888  "Y8888P88
 
-ClearValues(client)
+void ClearValues(int client)
 {
 	Format(g_sTag[client], sizeof(g_sTag[]), "");
 	Format(g_sTagColor[client], sizeof(g_sTagColor[]), "");
@@ -2654,7 +2462,7 @@ ClearValues(client)
 	Format(g_sDefaultChatColor[client], sizeof(g_sDefaultChatColor[]), "");
 }
 
-public OnClientConnected(client)
+public void OnClientConnected(int client)
 {
 	Format(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "");
 	Format(g_sInputType[client], sizeof(g_sInputType[]), "");
@@ -2666,7 +2474,7 @@ public OnClientConnected(client)
 	ClearValues(client);
 }
 
-public OnClientDisconnect(client)
+public void OnClientDisconnect(int client)
 {
 	Format(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "");
 	Format(g_sInputType[client], sizeof(g_sInputType[]), "");
@@ -2678,14 +2486,14 @@ public OnClientDisconnect(client)
 	ClearValues(client);
 }
 
-public OnClientPostAdminCheck(client)
+public void OnClientPostAdminCheck(int client)
 {
 	if (!ConfigForward(client))
 	{
 		return;
 	}
 
-	decl String:auth[32];
+	char auth[32];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
 	KvRewind(g_hConfigFile);
 
@@ -2694,11 +2502,11 @@ public OnClientPostAdminCheck(client)
 		KvRewind(g_hConfigFile);
 		KvGotoFirstSubKey(g_hConfigFile);
 
-		new AdminId:admin = GetUserAdmin(client);
-		new AdminFlag:flag;
-		decl String:configFlag[2];
-		decl String:section[32];
-		new bool:found = false;
+		AdminId admin = GetUserAdmin(client);
+		AdminFlag flag;
+		char configFlag[2];
+		char section[32];
+		bool found = false;
 
 		do
 		{
@@ -2740,21 +2548,22 @@ public OnClientPostAdminCheck(client)
 		}
 	}
 
-	decl String:clientTagColor[12];
-	decl String:clientNameColor[12];
-	decl String:clientChatColor[12];
+	char clientTagColor[12];
+	char clientNameColor[12];
+	char clientChatColor[12];
 
 	KvGetString(g_hConfigFile, "tag", g_sTag[client], sizeof(g_sTag[]));
 	KvGetString(g_hConfigFile, "tagcolor", clientTagColor, sizeof(clientTagColor));
 	KvGetString(g_hConfigFile, "namecolor", clientNameColor, sizeof(clientNameColor));
 	KvGetString(g_hConfigFile, "textcolor", clientChatColor, sizeof(clientChatColor));
+	g_bTagToggled[client] = view_as<bool>(KvGetNum(g_hConfigFile, "toggled"));
 	ReplaceString(clientTagColor, sizeof(clientTagColor), "#", "");
 	ReplaceString(clientNameColor, sizeof(clientNameColor), "#", "");
 	ReplaceString(clientChatColor, sizeof(clientChatColor), "#", "");
 
-	new tagLen = strlen(clientTagColor);
-	new nameLen = strlen(clientNameColor);
-	new chatLen = strlen(clientChatColor);
+	int tagLen = strlen(clientTagColor);
+	int nameLen = strlen(clientNameColor);
+	int chatLen = strlen(clientChatColor);
 
 	if (tagLen == 6 || tagLen == 8 || StrEqual(clientTagColor, "T", false) || StrEqual(clientTagColor, "G", false) || StrEqual(clientTagColor, "O", false) || StrEqual(clientTagColor, "X", false))
 	{
@@ -2780,191 +2589,152 @@ public OnClientPostAdminCheck(client)
 	Call_PushCell(client);
 	Call_Finish();
 }
-/*
-public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:message[])
+
+public Action Hook_UserMessage(UserMsg msg_id, Handle bf, const players[], int playersNum, bool reliable, bool init)
 {
-	//new bFlags = GetMessageFlags();
-	new iMaxMessageLength = MAXLENGTH_MESSAGE - strlen(name) - 5; // MAXLENGTH_MESSAGE = maximum characters in a chat message, including name. Subtract the characters in the name, and 5 to account for the colon, spaces, and null terminator
-
-	//PrintToServer("%N: %s (%d)", author, message, GetMessageFlags());
-
-	if (message[0] == '>' && GetConVarInt(g_hGreenText) > 0)
-		Format(message, iMaxMessageLength, "\x0714C800%s", message);
-
-	if (!g_bTagToggled[author])
-	{
-		if (CheckForward(author, message, CCC_NameColor))
-		{
-			if (StrEqual(g_sUsernameColor[author], "G", false))
-				Format(name, MAXLENGTH_NAME, "\x04%s", name);
-			else if (StrEqual(g_sUsernameColor[author], "O", false))
-				Format(name, MAXLENGTH_NAME, "\x05%s", name);
-			else if (StrEqual(g_sUsernameColor[author], "X", false))
-				Format(name, MAXLENGTH_NAME, "", name);
-			else if (strlen(g_sUsernameColor[author]) == 6)
-				Format(name, MAXLENGTH_NAME, "\x07%s%s", g_sUsernameColor[author], name);
-			else if (strlen(g_sUsernameColor[author]) == 8)
-				Format(name, MAXLENGTH_NAME, "\x08%s%s", g_sUsernameColor[author], name);
-			else
-				Format(name, MAXLENGTH_NAME, "\x03%s", name); // team color by default!
-		}
-		else
-		{
-			Format(name, MAXLENGTH_NAME, "\x03%s", name); // team color by default!
-		}
-
-		if (CheckForward(author, message, CCC_TagColor))
-		{
-			if (strlen(g_sTag[author]) > 0)
-			{
-				if (StrEqual(g_sTagColor[author], "T", false))
-					Format(name, MAXLENGTH_NAME, "\x03%s%s", g_sTag[author], name);
-				else if (StrEqual(g_sTagColor[author], "G", false))
-					Format(name, MAXLENGTH_NAME, "\x04%s%s", g_sTag[author], name);
-				else if (StrEqual(g_sTagColor[author], "O", false))
-					Format(name, MAXLENGTH_NAME, "\x05%s%s", g_sTag[author], name);
-				else if (strlen(g_sTagColor[author]) == 6)
-					Format(name, MAXLENGTH_NAME, "\x07%s%s%s", g_sTagColor[author], g_sTag[author], name);
-				else if (strlen(g_sTagColor[author]) == 8)
-					Format(name, MAXLENGTH_NAME, "\x08%s%s%s", g_sTagColor[author], g_sTag[author], name);
-				else
-					Format(name, MAXLENGTH_NAME, "\x01%s%s", g_sTag[author], name);
-			}
-		}
-
-		if (strlen(g_sChatColor[author]) > 0 && CheckForward(author, message, CCC_ChatColor))
-		{
-			if (StrEqual(g_sChatColor[author], "T", false))
-				Format(message, iMaxMessageLength, "\x03%s", message);
-			else if (StrEqual(g_sChatColor[author], "G", false))
-				Format(message, iMaxMessageLength, "\x04%s", message);
-			else if (StrEqual(g_sChatColor[author], "O", false))
-				Format(message, iMaxMessageLength, "\x05%s", message);
-			else if (strlen(g_sChatColor[author]) == 6)
-				Format(message, iMaxMessageLength, "\x07%s%s", g_sChatColor[author], message);
-			else if (strlen(g_sChatColor[author]) == 8)
-				Format(message, iMaxMessageLength, "\x08%s%s", g_sChatColor[author], message);
-		}
-	}
-
-	decl String:sGame[64];
-	GetGameFolderName(sGame, sizeof(sGame));
-
-	if (StrEqual(sGame, "csgo"))
-		Format(name, MAXLENGTH_NAME, "\x01\x0B%s", name);
-
-	Call_StartForward(messageForward);
-	Call_PushCell(author);
-	Call_PushStringEx(message, iMaxMessageLength, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushCell(iMaxMessageLength);
-	Call_Finish();
-
-	return Plugin_Changed;
-}
-*/
-
-public Action:Hook_UserMessage(UserMsg:msg_id, Handle:bf, const players[], playersNum, bool:reliable, bool:init)
-{
-	new String:sAuthorTag[64];
+	char sAuthorTag[64];
 	g_msgAuthor = BfReadByte(bf);
-	g_msgIsChat = bool:BfReadByte(bf);
+	g_msgIsChat = view_as<bool>(BfReadByte(bf));
 	BfReadString(bf, g_msgName, sizeof(g_msgName), false);
 	BfReadString(bf, g_msgSender, sizeof(g_msgSender), false);
 	BfReadString(bf, g_msgText, sizeof(g_msgText), false);
 
-	if(strlen(g_msgName) == 0 || strlen(g_msgSender) == 0 || strlen(g_msgText) == 0)
+	if (strlen(g_msgName) == 0 || strlen(g_msgSender) == 0 || strlen(g_msgText) == 0)
 		return Plugin_Continue;
 
-	if(!strcmp(g_msgName, "#Cstrike_Name_Change"))
+	if (!strcmp(g_msgName, "#Cstrike_Name_Change"))
 		return Plugin_Continue;
 
 	CCC_GetTag(g_msgAuthor, sAuthorTag, sizeof(sAuthorTag));
-	new bool:bNameAlpha;
-	new bool:bChatAlpha;
-	new bool:bTagAlpha;
-	new xiNameColor = CCC_GetColor(g_msgAuthor, CCC_ColorType:CCC_NameColor, bNameAlpha);
-	new xiChatColor = CCC_GetColor(g_msgAuthor, CCC_ColorType:CCC_ChatColor, bChatAlpha);
-	new xiTagColor = CCC_GetColor(g_msgAuthor, CCC_ColorType:CCC_TagColor, bTagAlpha);
 
-	if (xiNameColor == COLOR_CGREEN)
+	bool bNameAlpha;
+	bool bChatAlpha;
+	bool bTagAlpha;
+	bool bIsAction;
+	int xiNameColor = CCC_GetColor(g_msgAuthor, view_as<CCC_ColorType>(CCC_NameColor), bNameAlpha);
+	int xiChatColor = CCC_GetColor(g_msgAuthor, view_as<CCC_ColorType>(CCC_ChatColor), bChatAlpha);
+	int xiTagColor = CCC_GetColor(g_msgAuthor, view_as<CCC_ColorType>(CCC_TagColor), bTagAlpha);
+
+	TrimString(g_msgText);
+
+	if (!strncmp(g_msgText, "/me", 3, false))
 	{
-		Format(g_msgSender, sizeof(g_msgSender), "\x04%s", g_msgSender);
-	}
-	else if (xiNameColor == COLOR_OLIVE)
-	{
-		Format(g_msgSender, sizeof(g_msgSender), "\x05%s", g_msgSender);
-	}
-	else if (xiNameColor == COLOR_TEAM)
-	{
-		Format(g_msgSender, sizeof(g_msgSender), "\x03%s", g_msgSender);
-	}
-	else if (xiNameColor == COLOR_NULL)
-	{
-		Format(g_msgSender, sizeof(g_msgSender), "", g_msgSender);
-	}
-	else if (!bNameAlpha)
-	{
-		Format(g_msgSender, sizeof(g_msgSender), "\x07%06X%s", xiNameColor, g_msgSender);
-	}
-	else
-	{
-		Format(g_msgSender, sizeof(g_msgSender), "\x08%08X%s", xiNameColor, g_msgSender);
+		strcopy(g_msgName, sizeof(g_msgName), "Cstrike_Chat_Me");
+		strcopy(g_msgText, sizeof(g_msgText), g_msgText[4]);
+		bIsAction = true;
 	}
 
-	if(strlen(sAuthorTag) > 0)
+	if (GetConVarInt(g_hReplaceText) > 0)
 	{
-		if (xiTagColor == COLOR_TEAM)
+		char sPart[MAX_CHAT_LENGTH];
+		char sBuff[MAX_CHAT_LENGTH];
+		int CurrentIndex = 0;
+		int NextIndex = 0;
+
+		while(NextIndex != -1 && CurrentIndex < sizeof(g_msgText))
 		{
-			Format(g_msgSender, sizeof(g_msgSender), "\x03%s%s", sAuthorTag, g_msgSender);
+			NextIndex = BreakString(g_msgText[CurrentIndex], sPart, sizeof(sPart));
+
+			KvGetString(g_hReplaceConfigFile, sPart, sBuff, sizeof(sBuff), NULL_STRING);
+
+			if(sBuff[0])
+			{
+				ReplaceString(g_msgText[CurrentIndex], sizeof(g_msgText) - CurrentIndex, sPart, sBuff);
+				CurrentIndex += strlen(sBuff);
+			}
+			else
+				CurrentIndex += NextIndex;
 		}
-		else if (xiTagColor == COLOR_CGREEN)
+	}
+
+	if (!g_msgAuthor || HasFlag(g_msgAuthor, Admin_Generic))
+	{
+		CReplaceColorCodes(g_msgText, g_msgAuthor, false, sizeof(g_msgText));
+	}
+
+	if (!bIsAction)
+	{
+		if (xiNameColor == COLOR_TEAM || g_bTagToggled[g_msgAuthor])
 		{
-			Format(g_msgSender, sizeof(g_msgSender), "\x04%s%s", sAuthorTag, g_msgSender);
+			Format(g_msgSender, sizeof(g_msgSender), "\x03%s", g_msgSender);
 		}
-		else if (xiTagColor == COLOR_OLIVE)
+		else if (xiNameColor == COLOR_CGREEN)
 		{
-			Format(g_msgSender, sizeof(g_msgSender), "\x05%s%s", sAuthorTag, g_msgSender);
+			Format(g_msgSender, sizeof(g_msgSender), "\x04%s", g_msgSender);
 		}
-		else if (xiTagColor == COLOR_NONE)
+		else if (xiNameColor == COLOR_OLIVE)
 		{
-			Format(g_msgSender, sizeof(g_msgSender), "\x01%s%s", sAuthorTag, g_msgSender);
+			Format(g_msgSender, sizeof(g_msgSender), "\x05%s", g_msgSender);
+		}
+		else if (xiNameColor == COLOR_NULL)
+		{
+			Format(g_msgSender, sizeof(g_msgSender), "", g_msgSender);
 		}
 		else if (!bNameAlpha)
 		{
-			Format(g_msgSender, sizeof(g_msgSender), "\x07%06X%s%s", xiTagColor, sAuthorTag, g_msgSender);
+			Format(g_msgSender, sizeof(g_msgSender), "\x07%06X%s", xiNameColor, g_msgSender);
 		}
 		else
 		{
-			Format(g_msgSender, sizeof(g_msgSender), "\x08%08X%s%s", xiTagColor, sAuthorTag, g_msgSender);
+			Format(g_msgSender, sizeof(g_msgSender), "\x08%08X%s", xiNameColor, g_msgSender);
 		}
-	}
 
-	if (g_msgText[0] == '>' && GetConVarInt(g_hGreenText) > 0)
-	{
-		Format(g_msgText, sizeof(g_msgText), "\x0714C800%s", g_msgText);
-	}
-	else if (xiChatColor == COLOR_TEAM)
-	{
-		Format(g_msgText, sizeof(g_msgText), "\x03%s", g_msgText);
-	}
-	else if (xiChatColor == COLOR_CGREEN)
-	{
-		Format(g_msgText, sizeof(g_msgText), "\x04%s", g_msgText);
-	}
-	else if (xiChatColor == COLOR_OLIVE)
-	{
-		Format(g_msgText, sizeof(g_msgText), "\x05%s", g_msgText);
-	}
-	else if (xiChatColor == COLOR_NONE)
-	{
-	}
-	else if (!bNameAlpha)
-	{
-		Format(g_msgText, sizeof(g_msgText), "\x07%06X%s", xiChatColor, g_msgText);
-	}
-	else
-	{
-		Format(g_msgText, sizeof(g_msgText), "\x08%08X%s", xiChatColor, g_msgText);
+		if (!g_bTagToggled[g_msgAuthor] && strlen(sAuthorTag) > 0)
+		{
+			if (xiTagColor == COLOR_TEAM)
+			{
+				Format(g_msgSender, sizeof(g_msgSender), "\x03%s%s", sAuthorTag, g_msgSender);
+			}
+			else if (xiTagColor == COLOR_CGREEN)
+			{
+				Format(g_msgSender, sizeof(g_msgSender), "\x04%s%s", sAuthorTag, g_msgSender);
+			}
+			else if (xiTagColor == COLOR_OLIVE)
+			{
+				Format(g_msgSender, sizeof(g_msgSender), "\x05%s%s", sAuthorTag, g_msgSender);
+			}
+			else if (xiTagColor == COLOR_NONE)
+			{
+				Format(g_msgSender, sizeof(g_msgSender), "\x01%s%s", sAuthorTag, g_msgSender);
+			}
+			else if (!bTagAlpha)
+			{
+				Format(g_msgSender, sizeof(g_msgSender), "\x07%06X%s%s", xiTagColor, sAuthorTag, g_msgSender);
+			}
+			else
+			{
+				Format(g_msgSender, sizeof(g_msgSender), "\x08%08X%s%s", xiTagColor, sAuthorTag, g_msgSender);
+			}
+		}
+
+		if (g_msgText[0] == '>' && GetConVarInt(g_hGreenText) > 0)
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x0714C800%s", g_msgText);
+		}
+		else if (xiChatColor == COLOR_NONE || g_bTagToggled[g_msgAuthor])
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x01%s", g_msgText);
+		}
+		else if (xiChatColor == COLOR_TEAM)
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x03%s", g_msgText);
+		}
+		else if (xiChatColor == COLOR_CGREEN)
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x04%s", g_msgText);
+		}
+		else if (xiChatColor == COLOR_OLIVE)
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x05%s", g_msgText);
+		}
+		else if (!bChatAlpha)
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x07%06X%s", xiChatColor, g_msgText);
+		}
+		else
+		{
+			Format(g_msgText, sizeof(g_msgText), "\x08%08X%s", xiChatColor, g_msgText);
+		}
 	}
 
 	Format(g_msgFinal, sizeof(g_msgFinal), "%t", g_msgName, g_msgSender, g_msgText);
@@ -2981,9 +2751,9 @@ public Action:Hook_UserMessage(UserMsg:msg_id, Handle:bf, const players[], playe
 //  888   Y8888  d8888888888     888       888      Y888P    888       Y88b  d88P
 //  888    Y888 d88P     888     888     8888888     Y8P     8888888888 "Y8888P"
 
-stock bool:CheckForward(author, const String:message[], CCC_ColorType:type)
+stock bool CheckForward(int author, const char[] message, CCC_ColorType type)
 {
-	new Action:result = Plugin_Continue;
+	new Action result = Plugin_Continue;
 
 	Call_StartForward(applicationForward);
 	Call_PushCell(author);
@@ -3005,9 +2775,9 @@ stock bool:CheckForward(author, const String:message[], CCC_ColorType:type)
 	return true;
 }
 
-stock bool:ColorForward(author)
+stock bool ColorForward(int author)
 {
-	new Action:result = Plugin_Continue;
+	Action result = Plugin_Continue;
 
 	Call_StartForward(colorForward);
 	Call_PushCell(author);
@@ -3019,9 +2789,9 @@ stock bool:ColorForward(author)
 	return true;
 }
 
-stock bool:NameForward(author)
+stock bool NameForward(int author)
 {
-	new Action:result = Plugin_Continue;
+	Action result = Plugin_Continue;
 
 	Call_StartForward(nameForward);
 	Call_PushCell(author);
@@ -3033,9 +2803,9 @@ stock bool:NameForward(author)
 	return true;
 }
 
-stock bool:TagForward(author)
+stock bool TagForward(int author)
 {
-	new Action:result = Plugin_Continue;
+	Action result = Plugin_Continue;
 
 	Call_StartForward(tagForward);
 	Call_PushCell(author);
@@ -3047,9 +2817,9 @@ stock bool:TagForward(author)
 	return true;
 }
 
-stock bool:ConfigForward(client)
+stock bool ConfigForward(int client)
 {
-	new Action:result = Plugin_Continue;
+	Action result = Plugin_Continue;
 
 	Call_StartForward(preLoadedForward);
 	Call_PushCell(client);
@@ -3061,11 +2831,11 @@ stock bool:ConfigForward(client)
 	return true;
 }
 
-public Native_GetColor(Handle:plugin, numParams)
+public int Native_GetColor(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!client || client > MaxClients || !IsClientInGame(client))
 	{
 		ThrowNativeError(SP_ERROR_PARAM, "Invalid client or client is not in game");
 		return COLOR_NONE;
@@ -3164,17 +2934,17 @@ public Native_GetColor(Handle:plugin, numParams)
 	return COLOR_NONE;
 }
 
-public Native_SetColor(Handle:plugin, numParams)
+public int Native_SetColor(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!client || client > MaxClients || !IsClientInGame(client))
 	{
 		ThrowNativeError(SP_ERROR_PARAM, "Invalid client or client is not in game");
-		return false;
+		return 0;
 	}
 
-	decl String:color[32];
+	char color[32];
 
 	if (GetNativeCell(3) < 0)
 	{
@@ -3218,10 +2988,10 @@ public Native_SetColor(Handle:plugin, numParams)
 
 	if (strlen(color) != 6 && strlen(color) != 8 && !StrEqual(color, "G", false) && !StrEqual(color, "O", false) && !StrEqual(color, "T", false) && !StrEqual(color, "X", false))
 	{
-		return false;
+		return 0;
 	}
 
-	switch(GetNativeCell(2))
+	switch (GetNativeCell(2))
 	{
 		case CCC_TagColor:
 		{
@@ -3237,43 +3007,45 @@ public Native_SetColor(Handle:plugin, numParams)
 		}
 	}
 
-	return true;
+	return 1;
 }
 
-public Native_GetTag(Handle:plugin, numParams)
+public int Native_GetTag(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!client || client > MaxClients || !IsClientInGame(client))
 	{
 		ThrowNativeError(SP_ERROR_PARAM, "Invalid client or client is not in game");
-		return;
+		return 0;
 	}
 
 	SetNativeString(2, g_sTag[client], GetNativeCell(3));
+	return 1;
 }
 
-public Native_SetTag(Handle:plugin, numParams)
+public int Native_SetTag(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!client || client > MaxClients || !IsClientInGame(client))
 	{
 		ThrowNativeError(SP_ERROR_PARAM, "Invalid client or client is not in game");
-		return;
+		return 0;
 	}
 
 	GetNativeString(2, g_sTag[client], sizeof(g_sTag[]));
+	return 1;
 }
 
-public Native_ResetColor(Handle:plugin, numParams)
+public int Native_ResetColor(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!client || client > MaxClients || !IsClientInGame(client))
 	{
 		ThrowNativeError(SP_ERROR_PARAM, "Invalid client or client is not in game");
-		return;
+		return 0;
 	}
 
 	switch(GetNativeCell(2))
@@ -3291,24 +3063,27 @@ public Native_ResetColor(Handle:plugin, numParams)
 			strcopy(g_sChatColor[client], sizeof(g_sChatColor[]), g_sDefaultChatColor[client]);
 		}
 	}
+
+	return 1;
 }
 
-public Native_ResetTag(Handle:plugin, numParams)
+public int Native_ResetTag(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!client || client > MaxClients || !IsClientInGame(client))
 	{
 		ThrowNativeError(SP_ERROR_PARAM, "Invalid client or client is not in game");
-		return;
+		return 0;
 	}
 
 	strcopy(g_sTag[client], sizeof(g_sTag[]), g_sDefaultTag[client]);
+	return 1;
 }
 
-public Native_UpdateIgnoredArray(Handle:plugin, numParams)
+public int Native_UpdateIgnoredArray(Handle plugin, int numParams)
 {
 	GetNativeArray(1, g_Ignored, sizeof(g_Ignored));
 
-	return true;
+	return 1;
 }

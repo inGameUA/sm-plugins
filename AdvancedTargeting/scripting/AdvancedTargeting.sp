@@ -253,6 +253,7 @@ public APIWebResponse(const char[] sData, int client)
 	if(!Response.ImportFromString(sData, "SteamAPIResponse"))
 	{
 		LogError("ImportFromString(sData, \"SteamAPIResponse\") failed.");
+		delete Response;
 		return;
 	}
 

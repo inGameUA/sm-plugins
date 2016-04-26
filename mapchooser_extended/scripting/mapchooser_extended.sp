@@ -54,7 +54,7 @@
 #undef REQUIRE_PLUGIN
 #include <nativevotes>
 
-#define MCE_VERSION "1.10.2"
+#define MCE_VERSION "1.11.0"
 
 #define NV "nativevotes"
 
@@ -2160,6 +2160,11 @@ public Native_ExcludeMap(Handle:plugin, numParams)
 	GetNativeString(1, map, len+1);
 
 	PushArrayString(g_OldMapList, map);
+
+	if (GetArraySize(g_OldMapList) > GetConVarInt(g_Cvar_ExcludeMaps))
+	{
+		RemoveFromArray(g_OldMapList, 0);
+	}
 
 	return true;
 }
