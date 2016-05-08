@@ -100,6 +100,9 @@ public void OnClientDisconnect(int client)
 	SDKUnhook(client, SDKHook_WeaponDropPost, OnWeaponDrop);
 	SDKUnhook(client, SDKHook_WeaponEquipPost, OnWeaponEquip);
 
+	if(!IsClientInGame(client))
+		return;
+
 	// Simulate dropping all equipped weapons
 	for(int i = 0; i < 5; i++)
 	{

@@ -74,6 +74,9 @@ public void UpdateClients()
 
 public void OnClientPutInServer(int client)
 {
+	if(IsFakeClient(client))
+		return;
+
 	SendConVarValue(client, g_CVar_sv_cheats, "0");
 }
 

@@ -2,40 +2,36 @@
 
 #include <sourcemod>
 #include <sdktools>
-#include <morecolors>
+#include "morecolors.inc"
+#undef REQUIRE_PLUGIN
 
-#define PLUGIN_NAME 	"Toggle Weapon Sounds"
-#define PLUGIN_VERSION 	"1.2.0"
+#pragma newdecls required
+#define PLUGIN_VERSION 	"1.3.0"
 
-#define UPDATE_URL	"http://godtony.mooo.com/stopsound/stopsound.txt"
+bool g_bStopSound[MAXPLAYERS+1];
+bool g_bHooked;
+static char g_sKVPATH[PLATFORM_MAX_PATH];
+KeyValues g_hWepSounds;
 
-new bool:g_bStopSound[MAXPLAYERS+1], bool:g_bHooked;
-static String:g_sKVPATH[PLATFORM_MAX_PATH];
-new Handle:g_hWepSounds;
-
-public Plugin:myinfo =
+public Plugin myinfo =
 {
-	name = PLUGIN_NAME,
-	author = "GoD-Tony, edit by id/Obus",
+	name = "Toggle Weapon Sounds",
+	author = "GoD-Tony, edit by Obus + BotoX",
 	description = "Allows clients to stop hearing weapon sounds",
 	version = PLUGIN_VERSION,
 	url = "http://www.sourcemod.net/"
 };
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	// Detect game and hook appropriate tempent.
-	decl String:sGame[32];
+	static char sGame[32];
 	GetGameFolderName(sGame, sizeof(sGame));
 
-	if (StrEqual(sGame, "cstrike"))
-	{
+	if(StrEqual(sGame, "cstrike"))
 		AddTempEntHook("Shotgun Shot", CSS_Hook_ShotgunShot);
-	}
-	else if (StrEqual(sGame, "dod"))
-	{
+	else if(StrEqual(sGame, "dod"))
 		AddTempEntHook("FireBullets", DODS_Hook_FireBullets);
-	}
 
 	// TF2/HL2:DM and misc weapon sounds will be caught here.
 	AddNormalSoundHook(Hook_NormalSound);
@@ -43,62 +39,81 @@ public OnPluginStart()
 	CreateConVar("sm_stopsound_version", PLUGIN_VERSION, "Toggle Weapon Sounds", FCVAR_NOTIFY|FCVAR_DONTRECORD|FCVAR_REPLICATED);
 	RegConsoleCmd("sm_stopsound", Command_StopSound, "Toggle hearing weapon sounds");
 
-	if (g_hWepSounds != INVALID_HANDLE)
-	{
-		CloseHandle(g_hWepSounds);
-	}
-
-	g_hWepSounds = CreateKeyValues("WeaponSounds");
+	g_hWepSounds = new KeyValues("WeaponSounds");
 	BuildPath(Path_SM, g_sKVPATH, sizeof(g_sKVPATH), "data/playerprefs.WepSounds.txt");
+	g_hWepSounds.ImportFromFile(g_sKVPATH);
 
-	FileToKeyValues(g_hWepSounds, g_sKVPATH);
+	// Suppress reload sound effects
+	UserMsg ReloadEffect = GetUserMessageId("ReloadEffect");
+	if(ReloadEffect != INVALID_MESSAGE_ID)
+		HookUserMessage(ReloadEffect, Hook_ReloadEffect, true);
 
-	// Updater.
-	//if (LibraryExists("updater"))
-	//{
-	//	Updater_AddPlugin(UPDATE_URL);
-	//}
+	// Late load
+	for(int client = 1; client <= MaxClients; client++)
+	{
+		if(IsClientInGame(client) && IsClientAuthorized(client))
+		{
+			static char sAuth[32];
+			GetClientAuthId(client, AuthId_Steam2, sAuth, sizeof(sAuth));
+			OnClientAuthorized(client, sAuth);
+		}
+	}
 }
 
-/*public OnLibraryAdded(const String:name[])
+public void OnPluginEnd()
 {
-	if (StrEqual(name, "updater"))
+	for(int client = 1; client <= MaxClients; client++)
 	{
-		Updater_AddPlugin(UPDATE_URL);
+		if(IsClientInGame(client))
+			OnClientDisconnect_Post(client);
 	}
-}*/
 
-public Action:Command_StopSound(client, args)
+	// Detect game and unhook appropriate tempent.
+	static char sGame[32];
+	GetGameFolderName(sGame, sizeof(sGame));
+
+	if(StrEqual(sGame, "cstrike"))
+		RemoveTempEntHook("Shotgun Shot", CSS_Hook_ShotgunShot);
+	else if(StrEqual(sGame, "dod"))
+		RemoveTempEntHook("FireBullets", DODS_Hook_FireBullets);
+
+	// TF2/HL2:DM and misc weapon sounds were caught here.
+	RemoveNormalSoundHook(Hook_NormalSound);
+
+	UserMsg ReloadEffect = GetUserMessageId("ReloadEffect");
+	if(ReloadEffect != INVALID_MESSAGE_ID)
+		UnhookUserMessage(ReloadEffect, Hook_ReloadEffect, true);
+}
+
+public Action Command_StopSound(int client, int args)
 {
-	if (client == 0)
+	if(client == 0)
 	{
 		PrintToServer("[SM] Cannot use command from server console.");
 		return Plugin_Handled;
 	}
 
-	if (args > 0)
+	if(args > 0)
 	{
-		decl String:Arguments[32];
+		static char Arguments[32];
 		GetCmdArg(1, Arguments, sizeof(Arguments));
 
-		if (StrEqual(Arguments, "save"))
+		static char SID[32];
+		GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
+
+		if(StrEqual(Arguments, "save"))
 		{
-			KvRewind(g_hWepSounds);
+			g_hWepSounds.Rewind();
 
-			decl String:SID[32];
-			GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
-
-			if (KvJumpToKey(g_hWepSounds, SID, true))
+			if(g_hWepSounds.JumpToKey(SID, true))
 			{
-				new disabled;
-				disabled = KvGetNum(g_hWepSounds, "disabled", 0);
-
-				if (!disabled)
+				int disabled = g_hWepSounds.GetNum("disabled", 0);
+				if(!disabled)
 				{
 					//CPrintToChat(client, "[StopSound] Saved entry for STEAMID({green}%s{default}) {green}successfully{default}.", SID);
-					KvSetNum(g_hWepSounds, "disabled", 1);
-					KvRewind(g_hWepSounds);
-					KeyValuesToFile(g_hWepSounds, g_sKVPATH);
+					g_hWepSounds.SetNum("disabled", 1);
+					g_hWepSounds.Rewind();
+					g_hWepSounds.ExportToFile(g_sKVPATH);
 
 					g_bStopSound[client] = true;
 					CReplyToCommand(client, "{green}[StopSound]{default} Weapon sounds {red}disabled{default} - {green}entry saved{default}.");
@@ -109,9 +124,9 @@ public Action:Command_StopSound(client, args)
 				else
 				{
 					//CPrintToChat(client, "[StopSound] Entry for STEAMID({green}%s{default}) {green}successfully deleted{default}.", SID);
-					KvDeleteThis(g_hWepSounds);
-					KvRewind(g_hWepSounds);
-					KeyValuesToFile(g_hWepSounds, g_sKVPATH);
+					g_hWepSounds.DeleteThis();
+					g_hWepSounds.Rewind();
+					g_hWepSounds.ExportToFile(g_sKVPATH);
 
 					g_bStopSound[client] = false;
 					CReplyToCommand(client, "{green}[StopSound]{default} Weapon sounds {green}enabled{default} - {red}entry deleted{default}.");
@@ -121,24 +136,21 @@ public Action:Command_StopSound(client, args)
 				}
 			}
 
-			KvRewind(g_hWepSounds);
+			g_hWepSounds.Rewind();
 		}
-		else if (StrEqual(Arguments, "delete"))
+		else if(StrEqual(Arguments, "delete"))
 		{
-			KvRewind(g_hWepSounds);
+			g_hWepSounds.Rewind();
 
-			decl String:SID[32];
-			GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
-
-			if (KvJumpToKey(g_hWepSounds, SID, false))
+			if(g_hWepSounds.JumpToKey(SID, false))
 			{
 				g_bStopSound[client] = false;
 				CReplyToCommand(client, "{green}[StopSound]{default} Weapon sounds {green}enabled{default} - {red}entry deleted{default}.");
 				CheckHooks();
 
-				KvDeleteThis(g_hWepSounds);
-				KvRewind(g_hWepSounds);
-				KeyValuesToFile(g_hWepSounds, g_sKVPATH);
+				g_hWepSounds.DeleteThis();
+				g_hWepSounds.Rewind();
+				g_hWepSounds.ExportToFile(g_sKVPATH);
 
 				return Plugin_Handled;
 			}
@@ -162,41 +174,34 @@ public Action:Command_StopSound(client, args)
 	return Plugin_Handled;
 }
 
-public OnClientPutInServer(client)
+public void OnClientAuthorized(int client, const char[] auth)
 {
-	KvRewind(g_hWepSounds);
+	g_hWepSounds.Rewind();
 
-	decl String:SID[32];
-	GetClientAuthId(client, AuthId_Steam2, SID, sizeof(SID));
-
-	if (KvJumpToKey(g_hWepSounds, SID, false))
+	if(KvJumpToKey(g_hWepSounds, auth, false))
 	{
-		new disabled;
-		disabled = KvGetNum(g_hWepSounds, "disabled", 0);
-
-		if (disabled)
-		{
+		int disabled = g_hWepSounds.GetNum("disabled", 0);
+		if(disabled)
 			g_bStopSound[client] = true;
-		}
 	}
 
 	CheckHooks();
-	KvRewind(g_hWepSounds);
+	g_hWepSounds.Rewind();
 }
 
-public OnClientDisconnect_Post(client)
+public void OnClientDisconnect_Post(int client)
 {
 	g_bStopSound[client] = false;
 	CheckHooks();
 }
 
-CheckHooks()
+void CheckHooks()
 {
-	new bool:bShouldHook = false;
+	bool bShouldHook = false;
 
-	for (new i = 1; i <= MaxClients; i++)
+	for(int i = 1; i <= MaxClients; i++)
 	{
-		if (g_bStopSound[i])
+		if(g_bStopSound[i])
 		{
 			bShouldHook = true;
 			break;
@@ -207,25 +212,22 @@ CheckHooks()
 	g_bHooked = bShouldHook;
 }
 
-public Action:Hook_NormalSound(clients[64], &numClients, String:sample[PLATFORM_MAX_PATH], &entity, &channel, &Float:volume, &level, &pitch, &flags)
+public Action Hook_NormalSound(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
+	  int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
+	  char soundEntry[PLATFORM_MAX_PATH], int &seed)
 {
 	// Ignore non-weapon sounds.
-	if (!g_bHooked || !(strncmp(sample, "weapons", 7) == 0 || strncmp(sample[1], "weapons", 7) == 0))
-	{
+	if(!g_bHooked || !(strncmp(sample, "weapons", 7) == 0 || strncmp(sample[1], "weapons", 7) == 0))
 		return Plugin_Continue;
-	}
 
-	decl i, j;
-
-	for (i = 0; i < numClients; i++)
+	for(int i = 0; i < numClients; i++)
 	{
-		if (g_bStopSound[clients[i]])
+		int client = clients[i];
+		if(g_bStopSound[client])
 		{
 			// Remove the client from the array.
-			for (j = i; j < numClients - 1; j++)
-			{
+			for(int j = i; j < numClients - 1; j++)
 				clients[j] = clients[j + 1];
-			}
 
 			numClients--;
 			i--;
@@ -235,39 +237,30 @@ public Action:Hook_NormalSound(clients[64], &numClients, String:sample[PLATFORM_
 	return (numClients > 0) ? Plugin_Changed : Plugin_Stop;
 }
 
-public Action:CSS_Hook_ShotgunShot(const String:te_name[], const Players[], numClients, Float:delay)
+public Action CSS_Hook_ShotgunShot(const char[] te_name, const int[] Players, int numClients, float delay)
 {
-	if (!g_bHooked)
-	{
+	if(!g_bHooked)
 		return Plugin_Continue;
-	}
 
 	// Check which clients need to be excluded.
-	decl newClients[MaxClients], client, i;
-	new newTotal = 0;
+	int[] newClients = new int[numClients];
+	int newTotal = 0;
 
-	for (i = 0; i < numClients; i++)
+	for(int i = 0; i < numClients; i++)
 	{
-		client = Players[i];
-
-		if (!g_bStopSound[client])
-		{
+		int client = Players[i];
+		if(!g_bStopSound[client])
 			newClients[newTotal++] = client;
-		}
 	}
 
 	// No clients were excluded.
-	if (newTotal == numClients)
-	{
+	if(newTotal == numClients)
 		return Plugin_Continue;
-	}
-	else if (newTotal == 0) // All clients were excluded and there is no need to broadcast.
-	{
+	else if(newTotal == 0) // All clients were excluded and there is no need to broadcast.
 		return Plugin_Stop;
-	}
 
 	// Re-broadcast to clients that still need it.
-	decl Float:vTemp[3];
+	float vTemp[3];
 	TE_Start("Shotgun Shot");
 	TE_ReadVector("m_vecOrigin", vTemp);
 	TE_WriteVector("m_vecOrigin", vTemp);
@@ -284,39 +277,30 @@ public Action:CSS_Hook_ShotgunShot(const String:te_name[], const Players[], numC
 	return Plugin_Stop;
 }
 
-public Action:DODS_Hook_FireBullets(const String:te_name[], const Players[], numClients, Float:delay)
+public Action DODS_Hook_FireBullets(const char[] te_name, const int[] Players, int numClients, float delay)
 {
-	if (!g_bHooked)
-	{
+	if(!g_bHooked)
 		return Plugin_Continue;
-	}
 
 	// Check which clients need to be excluded.
-	decl newClients[MaxClients], client, i;
-	new newTotal = 0;
+	int[] newClients = new int[numClients];
+	int newTotal = 0;
 
-	for (i = 0; i < numClients; i++)
+	for(int i = 0; i < numClients; i++)
 	{
-		client = Players[i];
-
-		if (!g_bStopSound[client])
-		{
+		int client = Players[i];
+		if(!g_bStopSound[client])
 			newClients[newTotal++] = client;
-		}
 	}
 
 	// No clients were excluded.
-	if (newTotal == numClients)
-	{
+	if(newTotal == numClients)
 		return Plugin_Continue;
-	}
-	else if (newTotal == 0)// All clients were excluded and there is no need to broadcast.
-	{
+	else if(newTotal == 0)// All clients were excluded and there is no need to broadcast.
 		return Plugin_Stop;
-	}
 
 	// Re-broadcast to clients that still need it.
-	decl Float:vTemp[3];
+	float vTemp[3];
 	TE_Start("FireBullets");
 	TE_ReadVector("m_vecOrigin", vTemp);
 	TE_WriteVector("m_vecOrigin", vTemp);
@@ -330,4 +314,61 @@ public Action:DODS_Hook_FireBullets(const String:te_name[], const Players[], num
 	TE_Send(newClients, newTotal, delay);
 
 	return Plugin_Stop;
+}
+
+public Action Hook_ReloadEffect(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init)
+{
+	if(!g_bHooked)
+		return Plugin_Continue;
+
+	int client = msg.ReadShort();
+
+	// Check which clients need to be excluded.
+	int[] newClients = new int[playersNum];
+	int newTotal = 0;
+
+	for(int i = 0; i < playersNum; i++)
+	{
+		int client_ = players[i];
+		if(IsClientInGame(client_) && !g_bStopSound[client_])
+			newClients[newTotal++] = client_;
+	}
+
+	// No clients were excluded.
+	if(newTotal == playersNum)
+		return Plugin_Continue;
+	else if(newTotal == 0) // All clients were excluded and there is no need to broadcast.
+		return Plugin_Handled;
+
+	DataPack pack = new DataPack();
+	pack.WriteCell(client);
+	pack.WriteCell(newTotal);
+
+	ArrayList aPlayers = new ArrayList(newTotal, 1);
+	aPlayers.SetArray(0, newClients, newTotal);
+	pack.WriteCell(aPlayers);
+
+	RequestFrame(OnReloadEffect, pack);
+
+	return Plugin_Handled;
+}
+
+public void OnReloadEffect(DataPack pack)
+{
+	pack.Reset();
+	int client = pack.ReadCell();
+	int playersNum = pack.ReadCell();
+	ArrayList aPlayers = pack.ReadCell();
+	CloseHandle(pack);
+
+	int[] players = new int[playersNum];
+	aPlayers.GetArray(0, players, playersNum);
+	delete aPlayers;
+
+	Handle ReloadEffect = StartMessage("ReloadEffect", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+	if(GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf)
+		PbSetInt(ReloadEffect, "entidx", client);
+	else
+		BfWriteShort(ReloadEffect, client);
+	EndMessage();
 }
