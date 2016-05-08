@@ -63,7 +63,7 @@ public Plugin myinfo =
 	name = "Spray Manager",
 	description = "A plugin to help manage player sprays.",
 	author = "Obus",
-	version = "1.1",
+	version = "1.1.5",
 	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
@@ -211,6 +211,7 @@ public void OnAdminMenuReady(Handle hAdminMenu)
 
 	AddToTopMenu(g_hTopMenu, "SprayManager_Spraybanlist", TopMenuObject_Item, Handler_SprayBanList, hMenuObj);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Tracespray", TopMenuObject_Item, Handler_TraceSpray, hMenuObj, "sm_tracespray", ADMFLAG_GENERIC);
+	AddToTopMenu(g_hTopMenu, "SprayManager_Spray", TopMenuObject_Item, Handler_Spray, hMenuObj, "sm_spray", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Sprayban", TopMenuObject_Item, Handler_SprayBan, hMenuObj, "sm_sprayban", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Sprayunban", TopMenuObject_Item, Handler_SprayUnban, hMenuObj, "sm_sprayunban", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Banspray", TopMenuObject_Item, Handler_BanSpray, hMenuObj, "sm_banspray", ADMFLAG_GENERIC);
@@ -242,7 +243,9 @@ public void Handler_SprayBanList(Handle hMenu, TopMenuAction hAction, TopMenuObj
 public void Handler_TraceSpray(Handle hMenu, TopMenuAction hAction, TopMenuObject hObjID, int iParam1, char[] sBuffer, int iBufflen)
 {
 	if (hAction == TopMenuAction_DisplayOption)
+	{
 		Format(sBuffer, iBufflen, "%s", "Trace a Spray", iParam1);
+	}
 	else if (hAction == TopMenuAction_SelectOption)
 	{
 		float vecEndPos[3];
@@ -266,6 +269,14 @@ public void Handler_TraceSpray(Handle hMenu, TopMenuAction hAction, TopMenuObjec
 		if (g_hTopMenu != INVALID_HANDLE)
 			DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 	}
+}
+
+public void Handler_Spray(Handle hMenu, TopMenuAction hAction, TopMenuObject hObjID, int iParam1, char[] sBuffer, int iBufflen)
+{
+	if (hAction == TopMenuAction_DisplayOption)
+		Format(sBuffer, iBufflen, "%s", "Spray a Client's Spray", iParam1);
+	else if (hAction == TopMenuAction_SelectOption)
+		Menu_Spray(iParam1);
 }
 
 public void Handler_SprayBan(Handle hMenu, TopMenuAction hAction, TopMenuObject hObjID, int iParam1, char[] sBuffer, int iBufflen)
@@ -515,7 +526,9 @@ int MenuHandler_Menu_Trace_SprayBan(Menu hMenu, MenuAction action, int iParam1, 
 			if (iParam2 == MenuCancel_ExitBack)
 			{
 				if (IsValidClient(g_iSprayBanTarget[iParam1]))
+				{
 					Menu_Trace(iParam1, g_iSprayBanTarget[iParam1]);
+				}
 				else if (g_hTopMenu != INVALID_HANDLE)
 				{
 					g_bInvokedThroughTopMenu[iParam1] = false;
@@ -572,7 +585,9 @@ int MenuHandler_Menu_Trace_Ban(Menu hMenu, MenuAction action, int iParam1, int i
 			if (iParam2 == MenuCancel_ExitBack)
 			{
 				if (IsValidClient(g_iBanTarget[iParam1]))
+				{
 					Menu_Trace(iParam1, g_iBanTarget[iParam1]);
+				}
 				else if (g_hTopMenu != INVALID_HANDLE)
 				{
 					g_bInvokedThroughTopMenu[iParam1] = false;
@@ -610,6 +625,97 @@ int MenuHandler_Menu_Trace_Ban(Menu hMenu, MenuAction action, int iParam1, int i
 				FakeClientCommandEx(iParam1, "sm_ban \"#%i\" \"%s\" \"Inappropriate spray\"", GetClientUserId(g_iBanTarget[iParam1]), sOption);
 				g_iBanTarget[iParam1] = 0;
 				g_bInvokedThroughTopMenu[iParam1] = false;
+			}
+		}
+	}
+}
+
+void Menu_Spray(int client)
+{
+	if (!IsValidClient(client))
+		return;
+
+	Menu SprayMenu = new Menu(MenuHandler_Menu_Spray);
+	SprayMenu.SetTitle("[SprayManager] Select a Client to Force Spray:");
+	SprayMenu.ExitBackButton =  true;
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsValidClient(i))
+			continue;
+
+		char sUserID[16];
+		char sBuff[64];
+		int iUserID = GetClientUserId(i);
+
+		Format(sUserID, sizeof(sUserID), "%d", iUserID);
+
+		if (g_bSprayBanned[i] && g_bSprayHashBanned[i])
+		{
+			Format(sBuff, sizeof(sBuff), "%N (#%i) [Spray & Hash Banned]", i, iUserID);
+
+			SprayMenu.AddItem(sUserID, sBuff);
+		}
+		else if (g_bSprayBanned[i])
+		{
+			Format(sBuff, sizeof(sBuff), "%N (#%i) [Spray Banned]", i, iUserID);
+
+			SprayMenu.AddItem(sUserID, sBuff);
+		}
+		else if (g_bSprayHashBanned[i])
+		{
+			Format(sBuff, sizeof(sBuff), "%N (#%i) [Hash Banned]", i, iUserID);
+
+			SprayMenu.AddItem(sUserID, sBuff);
+		}
+		else
+		{
+			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
+
+			SprayMenu.AddItem(sUserID, sBuff);
+		}
+	}
+
+	SprayMenu.Display(client, MENU_TIME_FOREVER);
+}
+
+int MenuHandler_Menu_Spray(Menu hMenu, MenuAction action, int iParam1, int iParam2)
+{
+	switch (action)
+	{
+		case MenuAction_End:
+			CloseHandle(hMenu);
+
+		case MenuAction_Cancel:
+		{
+			if (iParam2 == MenuCancel_ExitBack && g_hTopMenu != INVALID_HANDLE)
+				DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
+		}
+
+		case MenuAction_Select:
+		{
+			char sOption[8];
+			hMenu.GetItem(iParam2, sOption, sizeof(sOption));
+
+			int target = GetClientOfUserId(StringToInt(sOption));
+
+			if (!IsValidClient(target))
+			{
+				PrintToChat(iParam1, "\x01\x04[SprayManager]\x01 Target no longer available.");
+
+				if (g_hTopMenu != INVALID_HANDLE)
+					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
+				else
+					CloseHandle(hMenu);
+			}
+			else
+			{
+				g_bAllowSpray = true;
+				ForceSpray(iParam1, target);
+
+				PrintToChat(iParam1, "\x01\x04[SprayManager]\x01 Sprayed \x04%N\x01's spray(s).", target);
+
+				Menu_Spray(iParam1);
 			}
 		}
 	}
@@ -1158,9 +1264,6 @@ public Action Command_AdminSpray(int client, int argc)
 			ReplyToTargetError(client, iTargetCount);
 			return Plugin_Handled;
 		}
-
-		float vecEndPos[3];
-		TracePlayerAngles(client, vecEndPos);
 
 		for (int i = 0; i < iTargetCount; i++)
 		{
