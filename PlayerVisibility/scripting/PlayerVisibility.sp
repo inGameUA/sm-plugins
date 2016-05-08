@@ -13,15 +13,49 @@ public Plugin myinfo =
 	url 			= ""
 };
 
+ConVar g_CVar_MaxDistance;
+ConVar g_CVar_MinFactor;
+ConVar g_CVar_MinAlpha;
+
+float g_fMaxDistance;
+float g_fMinFactor;
+float g_fMinAlpha;
+
 int g_Client_Alpha[MAXPLAYERS + 1] = {255, ...};
 
 public void OnPluginStart()
 {
+	g_CVar_MaxDistance = CreateConVar("sm_pvis_maxdistance", "100.0", "Distance at which models stop fading.", 0, true, 0.0);
+	g_fMaxDistance = g_CVar_MaxDistance.FloatValue;
+	g_CVar_MaxDistance.AddChangeHook(OnConVarChanged);
+
+	g_CVar_MinFactor = CreateConVar("sm_pvis_minfactor", "0.75", "Smallest allowed alpha factor per client.", 0, true, 0.0, true, 1.0);
+	g_fMinFactor = g_CVar_MinFactor.FloatValue;
+	g_CVar_MinFactor.AddChangeHook(OnConVarChanged);
+
+	g_CVar_MinAlpha = CreateConVar("sm_pvis_minalpha", "75.0", "Minimum allowed alpha value.", 0, true, 0.0, true, 255.0);
+	g_fMinAlpha = g_CVar_MinAlpha.FloatValue;
+	g_CVar_MinAlpha.AddChangeHook(OnConVarChanged);
+
 	for(int client = 1; client <= MaxClients; client++)
 	{
 		if(IsClientInGame(client))
 			OnClientPutInServer(client);
 	}
+
+	AutoExecConfig(true, "plugin.PlayerVisibility");
+}
+
+public void OnConVarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if(convar == g_CVar_MaxDistance)
+		g_fMaxDistance = g_CVar_MaxDistance.FloatValue;
+
+	else if(convar == g_CVar_MinFactor)
+		g_fMinFactor = g_CVar_MinFactor.FloatValue;
+
+	else if(convar == g_CVar_MinAlpha)
+		g_fMinAlpha = g_CVar_MinAlpha.FloatValue;
 }
 
 public void OnPluginEnd()
@@ -40,11 +74,13 @@ public void OnPluginEnd()
 
 public void OnClientPutInServer(int client)
 {
+	g_Client_Alpha[client] = 255;
 	SDKHook(client, SDKHook_PostThink, OnPostThink);
 }
 
 public void OnClientDisconnect(int client)
 {
+	g_Client_Alpha[client] = 255;
 	SDKUnhook(client, SDKHook_PostThink, OnPostThink);
 }
 
@@ -84,21 +120,19 @@ public void OnPostThink(client)
 		GetClientAbsOrigin(client, fVec1);
 		GetClientAbsOrigin(i, fVec2);
 
-		float fMaxDistance = 150.0;
 		float fDistance = GetVectorDistance(fVec1, fVec2, false);
-
-		if(fDistance <= fMaxDistance)
+		if(fDistance <= g_fMaxDistance)
 		{
-			float fFactor = fDistance / fMaxDistance;
-			if(fFactor < 0.75)
-				fFactor = 0.75;
+			float fFactor = fDistance / g_fMaxDistance;
+			if(fFactor < g_fMinFactor)
+				fFactor = g_fMinFactor;
 
 			fAlpha *= fFactor;
 		}
 	}
 
-	if(fAlpha < 100.0)
-		fAlpha = 100.0;
+	if(fAlpha < g_fMinAlpha)
+		fAlpha = g_fMinAlpha;
 
 	int Alpha = RoundToNearest(fAlpha);
 	int LastAlpha = g_Client_Alpha[client];

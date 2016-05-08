@@ -93,7 +93,7 @@ public Action Listener_Pause(int client, const char[] command, int argc)
 
 public Action:Event_BombPlanted(Handle:event, const String:name[], bool:dontBroadcast)
 {
-	for(new i = 1; i <= MAXPLAYERS; i++)
+	for(new i = 1; i <= MaxClients; i++)
 	{
 		if(IsClientInGame(i))
 			ClientCommand(i, "playgamesound \"radio/bombpl.wav\"");
@@ -103,7 +103,7 @@ public Action:Event_BombPlanted(Handle:event, const String:name[], bool:dontBroa
 
 public Action:Event_BombDefused(Handle:event, const String:name[], bool:dontBroadcast)
 {
-	for(new i = 1; i <= MAXPLAYERS; i++)
+	for(new i = 1; i <= MaxClients; i++)
 	{
 		if(IsClientInGame(i))
 			ClientCommand(i, "playgamesound \"radio/bombdef.wav\"");

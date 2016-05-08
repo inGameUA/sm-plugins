@@ -859,6 +859,9 @@ public Action Hook_UserMessageSendAudio(UserMsg msg_id, Handle bf, const int[] p
 
 	BfReadString(bf, g_MsgRadioSound, sizeof(g_MsgRadioSound), false);
 
+	if(StrEqual(g_MsgRadioSound, "radio.locknload"))
+		return Plugin_Continue;
+
 	DataPack pack = new DataPack();
 	pack.WriteCell(g_MsgDest);
 	pack.WriteCell(g_MsgClient);
@@ -870,9 +873,8 @@ public Action Hook_UserMessageSendAudio(UserMsg msg_id, Handle bf, const int[] p
 	pack.WriteString(g_MsgRadioSound);
 	pack.WriteCell(g_MsgPlayersNum);
 
-	ArrayList aPlayers = new ArrayList(g_MsgPlayersNum, 1);
-	aPlayers.SetArray(0, g_MsgPlayers, g_MsgPlayersNum);
-	pack.WriteCell(aPlayers);
+	for(int i = 0; i < g_MsgPlayersNum; i++)
+		pack.WriteCell(g_MsgPlayers[i]);
 
 	RequestFrame(OnPlayerRadio, pack);
 
@@ -891,13 +893,17 @@ public void OnPlayerRadio(DataPack pack)
 	pack.ReadString(g_MsgParam4, sizeof(g_MsgParam4));
 	pack.ReadString(g_MsgRadioSound, sizeof(g_MsgRadioSound));
 	g_MsgPlayersNum = pack.ReadCell();
-	ArrayList aPlayers = pack.ReadCell();
+
+	int playersNum = 0;
+	for(int i = 0; i < g_MsgPlayersNum; i++)
+	{
+		int client_ = pack.ReadCell();
+		if(IsClientInGame(client_))
+			g_MsgPlayers[playersNum++] = client_;
+	}
 	CloseHandle(pack);
 
-	aPlayers.GetArray(0, g_MsgPlayers, g_MsgPlayersNum);
-	delete aPlayers;
-
-	Handle RadioText = StartMessage("RadioText", g_MsgPlayers, g_MsgPlayersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+	Handle RadioText = StartMessage("RadioText", g_MsgPlayers, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
 	BfWriteByte(RadioText, g_MsgDest);
 	BfWriteByte(RadioText, g_MsgClient);
 	BfWriteString(RadioText, g_MsgName);
@@ -907,7 +913,7 @@ public void OnPlayerRadio(DataPack pack)
 	BfWriteString(RadioText, g_MsgParam4);
 	EndMessage();
 
-	Handle SendAudio = StartMessage("SendAudio", g_MsgPlayers, g_MsgPlayersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+	Handle SendAudio = StartMessage("SendAudio", g_MsgPlayers, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
 	BfWriteString(SendAudio, g_MsgRadioSound);
 	EndMessage();
 }

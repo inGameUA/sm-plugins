@@ -344,9 +344,8 @@ public Action Hook_ReloadEffect(UserMsg msg_id, BfRead msg, const int[] players,
 	pack.WriteCell(client);
 	pack.WriteCell(newTotal);
 
-	ArrayList aPlayers = new ArrayList(newTotal, 1);
-	aPlayers.SetArray(0, newClients, newTotal);
-	pack.WriteCell(aPlayers);
+	for(int i = 0; i < newTotal; i++)
+		pack.WriteCell(newClients[i]);
 
 	RequestFrame(OnReloadEffect, pack);
 
@@ -357,13 +356,18 @@ public void OnReloadEffect(DataPack pack)
 {
 	pack.Reset();
 	int client = pack.ReadCell();
-	int playersNum = pack.ReadCell();
-	ArrayList aPlayers = pack.ReadCell();
-	CloseHandle(pack);
+	int newTotal = pack.ReadCell();
 
-	int[] players = new int[playersNum];
-	aPlayers.GetArray(0, players, playersNum);
-	delete aPlayers;
+	int[] players = new int[newTotal];
+	int playersNum = 0;
+
+	for(int i = 0; i < newTotal; i++)
+	{
+		int client_ = pack.ReadCell();
+		if(IsClientInGame(client_))
+			players[playersNum++] = client_;
+	}
+	CloseHandle(pack);
 
 	Handle ReloadEffect = StartMessage("ReloadEffect", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
 	if(GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf)
