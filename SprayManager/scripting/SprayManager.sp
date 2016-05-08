@@ -53,6 +53,7 @@ int g_iSprayUnbanTarget[MAXPLAYERS + 1];
 int g_iSprayTraceTarget[MAXPLAYERS + 1];
 int g_iBanTarget[MAXPLAYERS + 1];
 
+float ACTUAL_NULL_VECTOR[3];
 float g_fNextSprayTime[MAXPLAYERS + 1];
 float g_vecSprayOrigin[MAXPLAYERS + 1][3];
 float g_SprayAABB[MAXPLAYERS + 1][AABBTotalPoints];
@@ -62,8 +63,8 @@ public Plugin myinfo =
 	name = "Spray Manager",
 	description = "A plugin to help manage player sprays.",
 	author = "Obus",
-	version = "1.0",
-	url = ""
+	version = "1.1",
+	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
 public APLRes AskPluginLoad2(Handle hThis, bool bLate, char[] err, int iErrLen)
@@ -77,7 +78,7 @@ public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 
-	RegAdminCmd("sm_spray", Command_AdminSpray, 0, "Spray a clients spray");
+	RegAdminCmd("sm_spray", Command_AdminSpray, ADMFLAG_GENERIC, "Spray a clients spray");
 	RegAdminCmd("sm_sprayban", Command_SprayBan, ADMFLAG_GENERIC, "Ban a client from spraying");
 	RegAdminCmd("sm_sprayunban", Command_SprayUnban, ADMFLAG_GENERIC, "Unban a client and allow them to spray");
 	RegAdminCmd("sm_banspray", Command_BanSpray, ADMFLAG_GENERIC, "Ban a clients spray from being sprayed (Note: This will not spray-ban the client, it will only ban the spray which they are currently using)");
@@ -152,7 +153,8 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnClientDisconnect(int client)
 {
-	SprayClientDecal(client, 0, NULL_VECTOR);
+	g_bAllowSpray = true;
+	SprayClientDecal(client, 0, ACTUAL_NULL_VECTOR);
 	ClearPlayerInfo(client);
 }
 
@@ -163,13 +165,14 @@ public Action CS_OnTerminateRound(float &fDelay, CSRoundEndReason &reason)
 		if (!IsValidClient(i))
 			continue;
 
-		if (g_vecSprayOrigin[i][0] != 0.0)
+		if (!IsVectorZero(g_vecSprayOrigin[i]))
 			g_iSprayLifetime[i]++;
 
 		if (g_iSprayLifetime[i] >= 2)
 		{
 			g_bAllowSpray = true;
-			SprayClientDecal(i, 0, NULL_VECTOR);
+			SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
+			g_iSprayLifetime[i] = 0;
 		}
 	}
 }
@@ -1340,7 +1343,7 @@ public Action Command_RemoveSpray(int client, int argc)
 			if (IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
 			{
 				g_bAllowSpray = true;
-				SprayClientDecal(i, 0, NULL_VECTOR);
+				SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
 
 				PrintToChat(client, "\x01\x04[SprayManager]\x01 You have successfully removed \x04%N\x01's spray.", i);
 
@@ -1478,9 +1481,7 @@ public void FrameAfterSpray(ArrayList Data)
 	delete Data;
 }
 
-public Action HookSprayer(int iClients[MAXPLAYERS], int &iNumClients, char sSoundName[PLATFORM_MAX_PATH],
-	   int &iEntity, int &iChannel, float &flVolume, int &iLevel, int &iPitch, int &iFlags,
-	   char sSoundEntry[PLATFORM_MAX_PATH], int &seed)
+public Action HookSprayer(int iClients[MAXPLAYERS], int &iNumClients, char sSoundName[PLATFORM_MAX_PATH], int &iEntity, int &iChannel, float &flVolume, int &iLevel, int &iPitch, int &iFlags, char sSoundEntry[PLATFORM_MAX_PATH], int &seed)
 {
 	if (StrEqual(sSoundName, "player/sprayer.wav") && iEntity > 0)
 		return Plugin_Handled;
@@ -1618,7 +1619,6 @@ public void OnSQLTableCreated(Handle hParent, Handle hChild, const char[] err, a
 
 	if (g_bGotBlacklist)
 	{
-		// TODO: Obus fix this.
 		if (g_bLoadedLate)
 		{
 			for (int i = 1; i <= MaxClients; i++)
@@ -1665,7 +1665,6 @@ public void OnSQLSprayBlacklistCreated(Handle hParent, Handle hChild, const char
 
 	if (g_bGotBans)
 	{
-		// TODO: Obus fix this.
 		if (g_bLoadedLate)
 		{
 			for (int i = 1; i <= MaxClients; i++)
@@ -1745,8 +1744,7 @@ bool SprayBanClient(int client, int target, int iBanLength, const char[] sReason
 	SQL_EscapeString(g_hDatabase, sReason, sSafeReason, 2 * strlen(sReason) + 1);
 
 	Format(sQuery, sizeof(sQuery), "INSERT INTO `spraymanager` (`steamid`, `name`, `unbantime`, `issuersteamid`, `issuername`, `issuedtime`, `issuedreason`) VALUES ('%s', '%s', '%i', '%s', '%s', '%i', '%s');",
-		sTargetSteamID, sSafeTargetName, iBanLength ? (GetTime() + (iBanLength * 60)) : 0,
-		sAdminSteamID, sSafeAdminName, GetTime(), strlen(sSafeReason) > 1 ? sSafeReason : "none");
+		sTargetSteamID, sSafeTargetName, iBanLength ? (GetTime() + (iBanLength * 60)) : 0, sAdminSteamID, sSafeAdminName, GetTime(), strlen(sSafeReason) > 1 ? sSafeReason : "none");
 
 	SQL_TQuery(g_hDatabase, DummyCallback, sQuery);
 
@@ -1759,7 +1757,7 @@ bool SprayBanClient(int client, int target, int iBanLength, const char[] sReason
 	g_fNextSprayTime[target] = 0.0;
 
 	g_bAllowSpray = true;
-	SprayClientDecal(target, 0, NULL_VECTOR);
+	SprayClientDecal(target, 0, ACTUAL_NULL_VECTOR);
 
 	return true;
 }
@@ -1823,7 +1821,7 @@ bool BanClientSpray(int client)
 	g_bSprayHashBanned[client] = true;
 
 	g_bAllowSpray = true;
-	SprayClientDecal(client, 0, NULL_VECTOR);
+	SprayClientDecal(client, 0, ACTUAL_NULL_VECTOR);
 
 	return true;
 }
@@ -2055,7 +2053,7 @@ void ClearPlayerInfo(int client)
 	g_iSprayBanTimestamp[client] = 0;
 	g_iSprayUnbanTimestamp[client] = -1;
 	g_fNextSprayTime[client] = 0.0;
-	g_vecSprayOrigin[client] = NULL_VECTOR;
+	g_vecSprayOrigin[client] = ACTUAL_NULL_VECTOR;
 }
 
 void FormatRemainingTime(int iTimestamp, char[] sBuffer, int iBuffSize)
