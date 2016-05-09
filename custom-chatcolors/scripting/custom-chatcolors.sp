@@ -10,7 +10,7 @@
 
 #include <ccc>
 
-#define PLUGIN_VERSION		"6.1.0"
+#define PLUGIN_VERSION		"6.1.4"
 #define MAX_CHAT_LENGTH		192
 
 public Plugin myinfo =
@@ -637,7 +637,7 @@ public Action Command_Say(int client, const char[] command, int argc)
 	char text[MAX_CHAT_LENGTH];
 	GetCmdArgString(text, sizeof(text));
 
-	if (client && !HasFlag(client, Admin_Generic))
+	if (client && IsClientInGame(client) && !HasFlag(client, Admin_Generic))
 	{
 		if (MakeStringPrintable(text, sizeof(text), ""))
 		{
@@ -659,7 +659,7 @@ public Action Command_Say(int client, const char[] command, int argc)
 		g_bWaitingForChatInput[client] = false;
 		ReplaceString(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput), "\"", "'");
 
-		if (g_sReceivedChatInput[client][0] != '#')
+		if (g_sReceivedChatInput[client][0] != '#' && !StrEqual(g_sInputType[client], "ChangeTag") && !StrEqual(g_sInputType[client], "MenuForceTag"))
 			Format(g_sReceivedChatInput[client], sizeof(g_sReceivedChatInput[]), "#%s", g_sReceivedChatInput[client]);
 
 		if (StrEqual(g_sInputType[client], "ChangeTag"))
@@ -778,67 +778,6 @@ public Action Command_Say(int client, const char[] command, int argc)
 	}
 
 	return Plugin_Continue;
-}
-
-public Action Event_PlayerSay(Handle event, const char[] name, bool dontBroadcast)
-{
-	if (g_msgAuthor == -1 || GetClientOfUserId(GetEventInt(event, "userid")) != g_msgAuthor)
-	{
-		return;
-	}
-
-	int[] players = new int[MaxClients + 1];
-	int playersNum = 0;
-
-	if (g_msgIsTeammate && g_msgAuthor > 0)
-	{
-		int team = GetClientTeam(g_msgAuthor);
-
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (IsClientInGame(client) && GetClientTeam(client) == team)
-			{
-				if(!g_Ignored[client * (MAXPLAYERS + 1) + g_msgAuthor])
-					players[playersNum++] = client;
-			}
-		}
-	}
-	else
-	{
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (IsClientInGame(client))
-			{
-				if(!g_Ignored[client * (MAXPLAYERS + 1) + g_msgAuthor])
-					players[playersNum++] = client;
-			}
-		}
-	}
-
-	if (!playersNum)
-	{
-		g_msgAuthor = -1;
-		return;
-	}
-
-	Handle SayText2 = StartMessage("SayText2", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
-
-	if (GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf)
-	{
-		PbSetInt(SayText2, "ent_idx", g_msgAuthor);
-		PbSetBool(SayText2, "chat", g_msgIsChat);
-		PbSetString(SayText2, "text", g_msgFinal);
-		EndMessage();
-	}
-	else
-	{
-		BfWriteByte(SayText2, g_msgAuthor);
-		BfWriteByte(SayText2, g_msgIsChat);
-		BfWriteString(SayText2, g_msgFinal);
-		EndMessage();
-	}
-
-	g_msgAuthor = -1;
 }
 
 ////////////////////////////////////////////
@@ -2599,11 +2538,16 @@ public Action Hook_UserMessage(UserMsg msg_id, Handle bf, const players[], int p
 	BfReadString(bf, g_msgSender, sizeof(g_msgSender), false);
 	BfReadString(bf, g_msgText, sizeof(g_msgText), false);
 
-	if (strlen(g_msgName) == 0 || strlen(g_msgSender) == 0 || strlen(g_msgText) == 0)
+	if (strlen(g_msgName) == 0 || strlen(g_msgSender) == 0)
 		return Plugin_Continue;
 
 	if (!strcmp(g_msgName, "#Cstrike_Name_Change"))
 		return Plugin_Continue;
+
+	TrimString(g_msgText);
+
+	if (strlen(g_msgText) == 0)
+		return Plugin_Handled;
 
 	CCC_GetTag(g_msgAuthor, sAuthorTag, sizeof(sAuthorTag));
 
@@ -2614,8 +2558,6 @@ public Action Hook_UserMessage(UserMsg msg_id, Handle bf, const players[], int p
 	int xiNameColor = CCC_GetColor(g_msgAuthor, view_as<CCC_ColorType>(CCC_NameColor), bNameAlpha);
 	int xiChatColor = CCC_GetColor(g_msgAuthor, view_as<CCC_ColorType>(CCC_ChatColor), bChatAlpha);
 	int xiTagColor = CCC_GetColor(g_msgAuthor, view_as<CCC_ColorType>(CCC_TagColor), bTagAlpha);
-
-	TrimString(g_msgText);
 
 	if (!strncmp(g_msgText, "/me", 3, false))
 	{
@@ -2713,7 +2655,6 @@ public Action Hook_UserMessage(UserMsg msg_id, Handle bf, const players[], int p
 		}
 		else if (xiChatColor == COLOR_NONE || g_bTagToggled[g_msgAuthor])
 		{
-			Format(g_msgText, sizeof(g_msgText), "\x01%s", g_msgText);
 		}
 		else if (xiChatColor == COLOR_TEAM)
 		{
@@ -2740,6 +2681,70 @@ public Action Hook_UserMessage(UserMsg msg_id, Handle bf, const players[], int p
 	Format(g_msgFinal, sizeof(g_msgFinal), "%t", g_msgName, g_msgSender, g_msgText);
 
 	return Plugin_Handled;
+}
+
+public Action Event_PlayerSay(Handle event, const char[] name, bool dontBroadcast)
+{
+	if (g_msgAuthor == -1 || GetClientOfUserId(GetEventInt(event, "userid")) != g_msgAuthor)
+	{
+		return;
+	}
+
+	if (strlen(g_msgText) == 0)
+		return;
+
+	int[] players = new int[MaxClients + 1];
+	int playersNum = 0;
+
+	if (g_msgIsTeammate && g_msgAuthor > 0)
+	{
+		int team = GetClientTeam(g_msgAuthor);
+
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			if (IsClientInGame(client) && GetClientTeam(client) == team)
+			{
+				if(!g_Ignored[client * (MAXPLAYERS + 1) + g_msgAuthor])
+					players[playersNum++] = client;
+			}
+		}
+	}
+	else
+	{
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			if (IsClientInGame(client))
+			{
+				if(!g_Ignored[client * (MAXPLAYERS + 1) + g_msgAuthor])
+					players[playersNum++] = client;
+			}
+		}
+	}
+
+	if (!playersNum)
+	{
+		g_msgAuthor = -1;
+		return;
+	}
+
+	Handle SayText2 = StartMessage("SayText2", players, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+
+	if (GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf)
+	{
+		PbSetInt(SayText2, "ent_idx", g_msgAuthor);
+		PbSetBool(SayText2, "chat", g_msgIsChat);
+		PbSetString(SayText2, "text", g_msgFinal);
+		EndMessage();
+	}
+	else
+	{
+		BfWriteByte(SayText2, g_msgAuthor);
+		BfWriteByte(SayText2, g_msgIsChat);
+		BfWriteString(SayText2, g_msgFinal);
+		EndMessage();
+	}
+
+	g_msgAuthor = -1;
 }
 
 //  888b    888        d8888 88888888888 8888888 888     888 8888888888 .d8888b.
