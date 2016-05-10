@@ -5,8 +5,8 @@
 #include <cstrike>
 
 #undef REQUIRE_PLUGIN
-
 #include <adminmenu>
+#define REQUIRE_PLUGIN
 
 #pragma newdecls required
 
@@ -60,11 +60,11 @@ float g_SprayAABB[MAXPLAYERS + 1][AABBTotalPoints];
 
 public Plugin myinfo =
 {
-	name = "Spray Manager",
-	description = "A plugin to help manage player sprays.",
-	author = "Obus",
-	version = "1.1.5",
-	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
+	name		= "Spray Manager",
+	description	= "A plugin to help manage player sprays.",
+	author		= "Obus",
+	version		= "1.2.0",
+	url			= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
 public APLRes AskPluginLoad2(Handle hThis, bool bLate, char[] err, int iErrLen)
@@ -128,6 +128,18 @@ public void OnPluginStart()
 
 public void OnPluginEnd()
 {
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
+
+		if (g_vecSprayOrigin[i][0] == 0.0)
+			continue;
+
+		g_bAllowSpray = true;
+		SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
+	}
+
 	RemoveTempEntHook("Player Decal", HookDecal);
 	RemoveNormalSoundHook(HookSprayer);
 
@@ -641,7 +653,7 @@ void Menu_Spray(int client)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsValidClient(i))
+		if (!IsValidClient(i) || IsFakeClient(i))
 			continue;
 
 		char sUserID[16];
@@ -1259,7 +1271,7 @@ public Action Command_AdminSpray(int client, int argc)
 
 		GetCmdArg(1, sArgs, sizeof(sArgs));
 
-		if (!(iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, 0, sTargetName, sizeof(sTargetName), bIsML)))
+		if ((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_NO_BOTS, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 		{
 			ReplyToTargetError(client, iTargetCount);
 			return Plugin_Handled;
@@ -1275,16 +1287,14 @@ public Action Command_AdminSpray(int client, int argc)
 
 		return Plugin_Handled;
 	}
-	else
-	{
-		float vecEndPos[3];
-		TracePlayerAngles(client, vecEndPos);
 
-		g_bAllowSpray = true;
-		ForceSpray(client, client);
+	float vecEndPos[3];
+	TracePlayerAngles(client, vecEndPos);
 
-		PrintToChat(client, "\x01\x04[SprayManager]\x01 Sprayed your own spray.");
-	}
+	g_bAllowSpray = true;
+	ForceSpray(client, client);
+
+	PrintToChat(client, "\x01\x04[SprayManager]\x01 Sprayed your own spray.");
 
 	return Plugin_Handled;
 }
@@ -1438,20 +1448,48 @@ public Action Command_RemoveSpray(int client, int argc)
 		return Plugin_Handled;
 	}
 
+	if (argc > 0)
+	{
+		char sArgs[64];
+		char sTargetName[MAX_TARGET_LENGTH];
+		int iTargets[MAXPLAYERS];
+		int iTargetCount;
+		bool bIsML;
+
+		GetCmdArg(1, sArgs, sizeof(sArgs));
+
+		if ((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_NO_BOTS, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+		{
+			ReplyToTargetError(client, iTargetCount);
+			return Plugin_Handled;
+		}
+
+		for (int i = 0; i < iTargetCount; i++)
+		{
+			g_bAllowSpray = true;
+			SprayClientDecal(iTargets[i], 0, ACTUAL_NULL_VECTOR);
+		}
+
+		PrintToChat(client, "\x01\x04[SprayManager]\x01 Removed \x04%s\x01's spray(s).", sTargetName);
+
+		return Plugin_Handled;
+	}
+
 	float vecEndPos[3];
+
 	if (TracePlayerAngles(client, vecEndPos))
 	{
 	 	for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
-			{
-				g_bAllowSpray = true;
-				SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
+			if (!IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
+				continue;
 
-				PrintToChat(client, "\x01\x04[SprayManager]\x01 You have successfully removed \x04%N\x01's spray.", i);
+			g_bAllowSpray = true;
+			SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
 
-				return Plugin_Handled;
-			}
+			PrintToChat(client, "\x01\x04[SprayManager]\x01 Removed \x04%N\x01's spray.", i);
+
+			return Plugin_Handled;
 		}
 	}
 
@@ -1553,6 +1591,8 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 	}
 
 	g_bAllowSpray = false;
+
+	g_iSprayLifetime[client] = 0;
 
 	g_vecSprayOrigin[client][0] = vecOrigin[0];
 	g_vecSprayOrigin[client][1] = vecOrigin[1];
@@ -1724,10 +1764,17 @@ public void OnSQLTableCreated(Handle hParent, Handle hChild, const char[] err, a
 	{
 		if (g_bLoadedLate)
 		{
-			for (int i = 1; i <= MaxClients; i++)
+			if (CreateTimer(2.5, RetryUpdatingPlayerInfo) == null)
 			{
-				if (IsValidClient(i))
+				LogError("Failed to create player info updater timer, attempting to update info now.");
+
+				for (int i = 1; i <= MaxClients; i++)
+				{
+					if (!IsValidClient)
+						continue;
+
 					OnClientPostAdminCheck(i);
+				}
 			}
 		}
 
@@ -1770,10 +1817,17 @@ public void OnSQLSprayBlacklistCreated(Handle hParent, Handle hChild, const char
 	{
 		if (g_bLoadedLate)
 		{
-			for (int i = 1; i <= MaxClients; i++)
+			if (CreateTimer(2.5, RetryUpdatingPlayerInfo) == null)
 			{
-				if (IsValidClient(i))
+				LogError("Failed to create player info updater timer, attempting to update info now.");
+
+				for (int i = 1; i <= MaxClients; i++)
+				{
+					if (!IsValidClient)
+						continue;
+
 					OnClientPostAdminCheck(i);
+				}
 			}
 		}
 
@@ -1789,6 +1843,17 @@ public Action RetryBlacklistTableCreation(Handle hTimer)
 		SQL_TQuery(g_hDatabase, OnSQLSprayBlacklistCreated, "CREATE TABLE IF NOT EXISTS `sprayblacklist` (`sprayhash` TEXT NOT NULL, `sprayer` TEXT DEFAULT 'unknown', `sprayersteamid` TEXT NOT NULL, PRIMARY KEY(sprayhash));");
 	else
 		SQL_TQuery(g_hDatabase, OnSQLSprayBlacklistCreated, "CREATE TABLE IF NOT EXISTS `sprayblacklist` (`sprayhash` VARCHAR(16) NOT NULL, `sprayer` VARCHAR(32) NOT NULL, `sprayersteamid` VARCHAR(32) NOT NULL, PRIMARY KEY(sprayhash)) CHARACTER SET utf8 COLLATE utf8_general_ci;");
+}
+
+public Action RetryUpdatingPlayerInfo(Handle hTimer)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsValidClient)
+			continue;
+
+		OnClientPostAdminCheck(i);
+	}
 }
 
 public void CVarHook_DecalFrequency(ConVar cvar, const char[] sOldValue, const char[] sNewValue)
@@ -1888,6 +1953,7 @@ bool SprayUnbanClient(int client)
 	strcopy(g_sBanIssuerSID[client], sizeof(g_sBanIssuerSID[]), "");
 	strcopy(g_sBanReason[client], sizeof(g_sBanReason[]), "");
 	g_bSprayBanned[client] = false;
+	g_iSprayLifetime[client] = 0;
 	g_iSprayBanTimestamp[client] = 0;
 	g_iSprayUnbanTimestamp[client] = -1;
 	g_fNextSprayTime[client] = 0.0;
@@ -2057,6 +2123,7 @@ bool ForceSpray(int client, int target, bool bPlaySound=true)
 		return false;
 
 	float vecEndPos[3];
+
 	if (TracePlayerAngles(client, vecEndPos))
 	{
 		SprayClientDecal(target, 0, vecEndPos);
@@ -2153,6 +2220,7 @@ void ClearPlayerInfo(int client)
 	strcopy(g_sSprayHash[client], sizeof(g_sSprayHash[]), "");
 	g_bSprayBanned[client] = false;
 	g_bSprayHashBanned[client] = false;
+	g_iSprayLifetime[client] = 0;
 	g_iSprayBanTimestamp[client] = 0;
 	g_iSprayUnbanTimestamp[client] = -1;
 	g_fNextSprayTime[client] = 0.0;
@@ -2191,7 +2259,7 @@ void FormatRemainingTime(int iTimestamp, char[] sBuffer, int iBuffSize)
 			seconds, SingularOrMultiple(seconds) ? "Seconds" : "Second");
 	}
 	else
-		Format(sBuffer, iBuffSize, "%d %s", seconds, SingularOrMultiple(seconds)?"Seconds":"Second");
+		Format(sBuffer, iBuffSize, "%d %s", seconds, SingularOrMultiple(seconds) ? "Seconds":"Second");
 }
 
 bool IsPointInsideAABB(float vecPoint[3], float AABB[6])
