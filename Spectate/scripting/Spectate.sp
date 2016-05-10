@@ -77,7 +77,7 @@ public Action Command_Spectate(int client, int argc)
 	GetCmdArg(1, sTarget, sizeof(sTarget));
 
 	int iTarget;
-	if (!(iTarget = FindTarget(client, sTarget, false, false)))
+	if ((iTarget = FindTarget(client, sTarget, false, false)) <= 0)
 		return Plugin_Handled;
 
 	if (!IsPlayerAlive(iTarget))
