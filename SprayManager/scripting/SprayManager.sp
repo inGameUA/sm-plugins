@@ -5,7 +5,9 @@
 #include <cstrike>
 
 #undef REQUIRE_PLUGIN
+
 #include <adminmenu>
+
 #define REQUIRE_PLUGIN
 
 #pragma newdecls required
@@ -1322,7 +1324,7 @@ public Action Command_SprayBan(int client, int argc)
 			GetCmdArg(3, sReason, sizeof(sReason));
 	}
 
-	if (!(iTarget = FindTarget(client, sTarget)))
+	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
 	if (SprayBanClient(client, iTarget, StringToInt(sLength), sReason))
@@ -1344,7 +1346,7 @@ public Action Command_SprayUnban(int client, int argc)
 
 	GetCmdArg(1, sTarget, sizeof(sTarget));
 
-	if (!(iTarget = FindTarget(client, sTarget)))
+	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
 	if (!SprayUnbanClient(iTarget))
@@ -1371,7 +1373,7 @@ public Action Command_BanSpray(int client, int argc)
 
 	GetCmdArg(1, sTarget, sizeof(sTarget));
 
-	if (!(iTarget = FindTarget(client, sTarget)))
+	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
 	if (!BanClientSpray(iTarget))
@@ -1398,7 +1400,7 @@ public Action Command_UnbanSpray(int client, int argc)
 
 	GetCmdArg(1, sTarget, sizeof(sTarget));
 
-	if (!(iTarget = FindTarget(client, sTarget)))
+	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
 	if (!UnbanClientSpray(iTarget))
