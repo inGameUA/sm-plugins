@@ -42,10 +42,12 @@
 // Do not edit below this line //
 //-----------------------------//
 
-#define PLUGIN_VERSION "(SB++) 1.5.5"
+#define PLUGIN_VERSION "(SB++) 1.5.6"
 #define PREFIX "\x04[SourceComms]\x01 "
 
-#define MAX_TIME_MULTI 30       // maximum mass-target punishment length
+#define MAX_TIME_MULTI 30 // maximum mass-target punishment length
+// session mute will expire after this if it hasn't already (fallback)
+#define SESSION_MUTE_FALLBACK 120 * 60
 
 #define NOW 0
 #define TYPE_TEMP_SHIFT 10
@@ -56,9 +58,9 @@
 #define TYPE_UNMUTE 4
 #define TYPE_UNGAG 5
 #define TYPE_UNSILENCE 6
-#define TYPE_TEMP_UNMUTE 14     // TYPE_TEMP_SHIFT + TYPE_UNMUTE
-#define TYPE_TEMP_UNGAG 15      // TYPE_TEMP_SHIFT + TYPE_UNGAG
-#define TYPE_TEMP_UNSILENCE 16  // TYPE_TEMP_SHIFT + TYPE_UNSILENCE
+#define TYPE_TEMP_UNMUTE 14	// TYPE_TEMP_SHIFT + TYPE_UNMUTE
+#define TYPE_TEMP_UNGAG 15 // TYPE_TEMP_SHIFT + TYPE_UNGAG
+#define TYPE_TEMP_UNSILENCE 16 // TYPE_TEMP_SHIFT + TYPE_UNSILENCE
 
 #define MAX_REASONS 32
 #define DISPLAY_SIZE 64
@@ -110,9 +112,9 @@ new Handle:SQLiteDB;
 new String:DatabasePrefix[10] = "sb";
 
 /* Timer handles */
-new Handle:g_hPlayerRecheck[MAXPLAYERS + 1] =  { INVALID_HANDLE, ... };
-new Handle:g_hGagExpireTimer[MAXPLAYERS + 1] =  { INVALID_HANDLE, ... };
-new Handle:g_hMuteExpireTimer[MAXPLAYERS + 1] =  { INVALID_HANDLE, ... };
+new Handle:g_hPlayerRecheck[MAXPLAYERS + 1] = { INVALID_HANDLE, ... };
+new Handle:g_hGagExpireTimer[MAXPLAYERS + 1] = { INVALID_HANDLE, ... };
+new Handle:g_hMuteExpireTimer[MAXPLAYERS + 1] = { INVALID_HANDLE, ... };
 
 
 /* Log Stuff */
@@ -218,7 +220,7 @@ public OnPluginStart()
 	// Catch config error
 	if (!SQL_CheckConfig(DATABASE))
 	{
-		SetFailState("Database failure: could not find database conf  %s", DATABASE);
+		SetFailState("Database failure: could not find database config: %s", DATABASE);
 		return;
 	}
 	DB_Connect();
@@ -246,6 +248,21 @@ public OnMapStart()
 
 public OnMapEnd()
 {
+	decl String:Query[2048];
+	Format(Query, sizeof(Query),
+		"UPDATE	%s_comms \
+		SET		RemovedBy = 0, \
+				RemoveType = 'E', \
+				RemovedOn = UNIX_TIMESTAMP() \
+		WHERE	sid = %d \
+		AND		RemovedOn IS NULL \
+		AND		length = -1",
+		DatabasePrefix, serverID);
+	#if defined LOG_QUERIES
+	LogToFile(logQuery, "OnMapEnd for: %s. QUERY: %s", clientAuth, Query);
+	#endif
+	SQL_TQuery(g_hDatabase, Query_ErrorCheck, Query);
+
 	// Clean up on map end just so we can start a fresh connection when we need it later.
 	// Also it is necessary for using SQL_SetCharset
 	if (g_hDatabase)
@@ -310,16 +327,16 @@ public OnClientPostAdminCheck(client)
 
 		decl String:Query[4096];
 		FormatEx(Query, sizeof(Query),
-			"SELECT      (c.ends - UNIX_TIMESTAMP()) AS remaining, \
-                        c.length, c.type, c.created, c.reason, a.user, \
-                        IF (a.immunity>=g.immunity, a.immunity, IFNULL(g.immunity,0)) AS immunity, \
-                        c.aid, c.sid, a.authid \
-            FROM        %s_comms     AS c \
-            LEFT JOIN   %s_admins    AS a  ON a.aid = c.aid \
-            LEFT JOIN   %s_srvgroups AS g  ON g.name = a.srv_group \
-            WHERE       RemoveType IS NULL \
-                          AND c.authid REGEXP '^STEAM_[0-9]:%s$' \
-                          AND (length = '0' OR ends > UNIX_TIMESTAMP())",
+			"SELECT		(c.ends - UNIX_TIMESTAMP()) AS remaining, \
+						c.length, c.type, c.created, c.reason, a.user, \
+						IF (a.immunity>=g.immunity, a.immunity, IFNULL(g.immunity,0)) AS immunity, \
+						c.aid, c.sid, a.authid \
+			FROM		%s_comms	AS c \
+			LEFT JOIN	%s_admins	AS a  ON a.aid = c.aid \
+			LEFT JOIN	%s_srvgroups AS g  ON g.name = a.srv_group \
+			WHERE		RemoveType IS NULL \
+							AND c.authid REGEXP '^STEAM_[0-9]:%s$' \
+							AND (length = '0' OR ends > UNIX_TIMESTAMP())",
 			DatabasePrefix, DatabasePrefix, DatabasePrefix, sClAuthYZEscaped);
 		#if defined LOG_QUERIES
 		LogToFile(logQuery, "OnClientPostAdminCheck for: %s. QUERY: %s", clientAuth, Query);
@@ -1205,7 +1222,7 @@ public GotDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
 	g_DatabaseState = DatabaseState_Connected;
 	g_hDatabase = hndl;
 
-	// See if the connection is valid.  If not, don't un-mark the caches
+	// See if the connection is valid. If not, don't un-mark the caches
 	// as needing rebuilding, in case the next connection request works.
 	if (!g_hDatabase)
 	{
@@ -1230,8 +1247,8 @@ public GotDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
 
 	// Process queue
 	SQL_TQuery(SQLiteDB, Query_ProcessQueue,
-		"SELECT  id, steam_id, time, start_time, reason, name, admin_id, admin_ip, type \
-        FROM    queue2");
+		"SELECT	id, steam_id, time, start_time, reason, name, admin_id, admin_ip, type \
+		FROM	queue2");
 
 	// Force recheck players
 	ForcePlayersRecheck();
@@ -1389,12 +1406,12 @@ public Query_UnBlockSelect(Handle:owner, Handle:hndl, const String:error[], any:
 
 				decl String:query[2048];
 				Format(query, sizeof(query),
-					"UPDATE  %s_comms \
-                    SET     RemovedBy = %d, \
-                            RemoveType = 'U', \
-                            RemovedOn = UNIX_TIMESTAMP(), \
-                            ureason = '%s' \
-                    WHERE   bid = %d",
+					"UPDATE	%s_comms \
+					SET		RemovedBy = %d, \
+							RemoveType = 'U', \
+							RemovedOn = UNIX_TIMESTAMP(), \
+							ureason = '%s' \
+					WHERE	bid = %d",
 					DatabasePrefix, iAID, unbanReason, bid);
 				#if defined LOG_QUERIES
 				LogToFile(logQuery, "Query_UnBlockSelect. QUERY: %s", query);
@@ -1567,10 +1584,10 @@ public Query_ProcessQueue(Handle:owner, Handle:hndl, const String:error[], any:d
 		// all blocks should be entered into db!
 
 		FormatEx(query, sizeof(query),
-			"INSERT INTO     %s_comms (authid, name, created, ends, length, reason, aid, adminIp, sid, type) \
-                VALUES         ('%s', '%s', %d, %d, %d, '%s', \
-                                IFNULL((SELECT aid FROM %s_admins WHERE authid = '%s' OR authid REGEXP '^STEAM_[0-9]:%s$'), '0'), \
-                                '%s', %d, %d)",
+			"INSERT INTO	 %s_comms (authid, name, created, ends, length, reason, aid, adminIp, sid, type) \
+				VALUES		 ('%s', '%s', %d, %d, %d, '%s', \
+								IFNULL((SELECT aid FROM %s_admins WHERE authid = '%s' OR authid REGEXP '^STEAM_[0-9]:%s$'), '0'), \
+								'%s', %d, %d)",
 			DatabasePrefix, sAuthEscaped, banName, startTime, (startTime + (time * 60)), (time * 60), banReason, DatabasePrefix, sAdmAuthEscaped, sAdmAuthYZEscaped, adminIp, serverID, type);
 		#if defined LOG_QUERIES
 		LogToFile(logQuery, "Query_ProcessQueue. QUERY: %s", query);
@@ -1587,7 +1604,7 @@ public Query_AddBlockFromQueue(Handle:owner, Handle:hndl, const String:error[], 
 		// The insert was successful so delete the record from the queue
 		FormatEx(query, sizeof(query),
 			"DELETE FROM queue2 \
-            WHERE       id = %d",
+			WHERE		id = %d",
 			data);
 		#if defined LOG_QUERIES
 		LogToFile(logQuery, "Query_AddBlockFromQueue. QUERY: %s", query);
@@ -1993,15 +2010,15 @@ stock InitializeBackupDB()
 
 	SQL_TQuery(SQLiteDB, Query_ErrorCheck,
 		"CREATE TABLE IF NOT EXISTS queue2 ( \
-            id INTEGER PRIMARY KEY, \
-            steam_id TEXT, \
-            time INTEGER, \
-            start_time INTEGER, \
-            reason TEXT, \
-            name TEXT, \
-            admin_id TEXT, \
-            admin_ip TEXT, \
-            type INTEGER)");
+			id INTEGER PRIMARY KEY, \
+			steam_id TEXT, \
+			time INTEGER, \
+			start_time INTEGER, \
+			reason TEXT, \
+			name TEXT, \
+			admin_id TEXT, \
+			admin_ip TEXT, \
+			type INTEGER)");
 }
 
 stock CreateBlock(client, targetId = 0, length = -1, type, const String:sReason[] = "", const String:sArgs[] = "")
@@ -2405,18 +2422,18 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 
 			decl String:query[4096];
 			Format(query, sizeof(query),
-				"SELECT      c.bid, \
-                            IFNULL((SELECT aid FROM %s_admins WHERE authid = '%s' OR authid REGEXP '^STEAM_[0-9]:%s$'), '0') as iaid, \
-                            c.aid, \
-                            IF (a.immunity>=g.immunity, a.immunity, IFNULL(g.immunity,0)) as immunity, \
-                            c.type \
-                FROM        %s_comms     AS c \
-                LEFT JOIN   %s_admins    AS a ON a.aid = c.aid \
-                LEFT JOIN   %s_srvgroups AS g ON g.name = a.srv_group \
-                WHERE       RemoveType IS NULL \
-                              AND (c.authid = '%s' OR c.authid REGEXP '^STEAM_[0-9]:%s$') \
-                              AND (length = '0' OR ends > UNIX_TIMESTAMP()) \
-                              AND %s",
+				"SELECT 	c.bid, \
+							IFNULL((SELECT aid FROM %s_admins WHERE authid = '%s' OR authid REGEXP '^STEAM_[0-9]:%s$'), '0') as iaid, \
+							c.aid, \
+							IF (a.immunity>=g.immunity, a.immunity, IFNULL(g.immunity,0)) as immunity, \
+							c.type \
+				FROM		%s_comms	 AS c \
+				LEFT JOIN	%s_admins	AS a ON a.aid = c.aid \
+				LEFT JOIN	%s_srvgroups AS g ON g.name = a.srv_group \
+				WHERE		RemoveType IS NULL \
+								AND (c.authid = '%s' OR c.authid REGEXP '^STEAM_[0-9]:%s$') \
+								AND (length = '0' OR ends > UNIX_TIMESTAMP()) \
+								AND %s",
 				DatabasePrefix, sAdminAuthEscaped, sAdminAuthYZEscaped, DatabasePrefix, DatabasePrefix, DatabasePrefix, sTargetAuthEscaped, sTargetAuthYZEscaped, typeWHERE);
 
 			#if defined LOG_QUERIES
@@ -2924,15 +2941,25 @@ stock SavePunishment(admin = 0, target, type, length = -1, const String:reason[]
 		SQL_EscapeString(g_hDatabase, adminAuth, sAdminAuthIdEscaped, sizeof(sAdminAuthIdEscaped));
 		SQL_EscapeString(g_hDatabase, adminAuth[8], sAdminAuthIdYZEscaped, sizeof(sAdminAuthIdYZEscaped));
 
-		// bid    authid    name    created ends lenght reason aid adminip    sid    removedBy removedType removedon type ureason
+		// bid	authid	name	created ends lenght reason aid adminip	sid	removedBy removedType removedon type ureason
 		FormatEx(sQueryAdm, sizeof(sQueryAdm),
 			"IFNULL((SELECT aid FROM %s_admins WHERE authid = '%s' OR authid REGEXP '^STEAM_[0-9]:%s$'), 0)",
 			DatabasePrefix, sAdminAuthIdEscaped, sAdminAuthIdYZEscaped);
 
-		// authid name, created, ends, length, reason, aid, adminIp, sid
-		FormatEx(sQueryVal, sizeof(sQueryVal),
-			"'%s', '%s', UNIX_TIMESTAMP(), UNIX_TIMESTAMP() + %d, %d, '%s', %s, '%s', %d",
-			sAuthidEscaped, banName, length * 60, length * 60, banReason, sQueryAdm, adminIp, serverID);
+		if (length >= 0)
+		{
+			// authid name, created, ends, length, reason, aid, adminIp, sid
+			FormatEx(sQueryVal, sizeof(sQueryVal),
+				"'%s', '%s', UNIX_TIMESTAMP(), UNIX_TIMESTAMP() + %d, %d, '%s', %s, '%s', %d",
+				sAuthidEscaped, banName, length * 60, length * 60, banReason, sQueryAdm, adminIp, serverID);
+		}
+		else // Session mutes
+		{
+			// authid name, created, ends, length, reason, aid, adminIp, sid
+			FormatEx(sQueryVal, sizeof(sQueryVal),
+				"'%s', '%s', UNIX_TIMESTAMP(), UNIX_TIMESTAMP() + %d, %d, '%s', %s, '%s', %d",
+				sAuthidEscaped, banName, SESSION_MUTE_FALLBACK, -1, banReason, sQueryAdm, adminIp, serverID);
+		}
 
 		switch (type)
 		{
