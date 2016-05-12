@@ -2338,7 +2338,6 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 	else
 	{
 		decl String:typeWHERE[100];
-		new bool:dontCheckDB = false;
 		new target = target_list[0];
 
 		if (IsClientInGame(target))
@@ -2360,11 +2359,7 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 					return;
 				}
 				else
-				{
 					FormatEx(typeWHERE, sizeof(typeWHERE), "c.type = '%d'", TYPE_MUTE);
-					if (g_MuteType[target] == bSess)
-						dontCheckDB = true;
-				}
 			}
 			//-------------------------------------------------------------------------------------------------
 			case TYPE_UNGAG:
@@ -2375,11 +2370,7 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 					return;
 				}
 				else
-				{
 					FormatEx(typeWHERE, sizeof(typeWHERE), "c.type = '%d'", TYPE_GAG);
-					if (g_GagType[target] == bSess)
-						dontCheckDB = true;
-				}
 			}
 			//-------------------------------------------------------------------------------------------------
 			case TYPE_UNSILENCE:
@@ -2390,11 +2381,7 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 					return;
 				}
 				else
-				{
 					FormatEx(typeWHERE, sizeof(typeWHERE), "(c.type = '%d' OR c.type = '%d')", TYPE_MUTE, TYPE_GAG);
-					if (g_MuteType[target] == bSess && g_GagType[target] == bSess)
-						dontCheckDB = true;
-				}
 			}
 		}
 
@@ -2408,7 +2395,7 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 		WritePackString(dataPack, reason);
 
 		// Check current player status. If player has temporary punishment - don't get info from DB
-		if (!dontCheckDB && DB_Connect())
+		if (DB_Connect())
 		{
 			decl String:sAdminAuthEscaped[sizeof(adminAuth) * 2 + 1];
 			decl String:sAdminAuthYZEscaped[sizeof(adminAuth) * 2 + 1];
@@ -2422,7 +2409,7 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 
 			decl String:query[4096];
 			Format(query, sizeof(query),
-				"SELECT 	c.bid, \
+				"SELECT		c.bid, \
 							IFNULL((SELECT aid FROM %s_admins WHERE authid = '%s' OR authid REGEXP '^STEAM_[0-9]:%s$'), '0') as iaid, \
 							c.aid, \
 							IF (a.immunity>=g.immunity, a.immunity, IFNULL(g.immunity,0)) as immunity, \
