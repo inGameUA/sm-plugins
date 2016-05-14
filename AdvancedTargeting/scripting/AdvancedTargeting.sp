@@ -1,34 +1,38 @@
 #pragma semicolon 1
-#define PLUGIN_VERSION "1.0"
 
 #pragma dynamic 128*1024
 
 #include <sourcemod>
+#include <sdktools>
 #include <SteamWorks>
-//#include <EasyJSON>
+#include <cstrike>
 #include <AdvancedTargeting>
+
+#pragma newdecls required
 
 Handle g_FriendsArray[MAXPLAYERS + 1] = {INVALID_HANDLE, ...};
 bool g_bLateLoad = false;
 
-//#define STEAM_API_KEY "secret"
-#include "SteamAPI.secret"
+#include "SteamAPI.secret" //#define STEAM_API_KEY here
 
 public Plugin myinfo =
 {
 	name = "Advanced Targeting",
-	author = "BotoX",
-	description = "Adds @admins and @friends targeting method",
-	version = PLUGIN_VERSION,
-	url = ""
+	author = "BotoX + Obus",
+	description = "Adds extra targeting methods",
+	version = "1.1",
+	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/AdvancedTargeting/"
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	AddMultiTargetFilter("@admins", Filter_Admin, "Admins", false);
 	AddMultiTargetFilter("@!admins", Filter_NotAdmin, "Not Admins", false);
 	AddMultiTargetFilter("@friends", Filter_Friends, "Steam Friends", false);
 	AddMultiTargetFilter("@!friends", Filter_NotFriends, "Not Steam Friends", false);
+	AddMultiTargetFilter("@random", Filter_Random, "a Random Player", false);
+	AddMultiTargetFilter("@randomct", Filter_RandomCT, "a Random CT", false);
+	AddMultiTargetFilter("@randomt", Filter_RandomT, "a Random T", false);
 
 	RegConsoleCmd("sm_admins", Command_Admins, "Currently online admins.");
 	RegConsoleCmd("sm_friends", Command_Friends, "Currently online friends.");
@@ -36,7 +40,7 @@ public OnPluginStart()
 	if(g_bLateLoad)
 	{
 		char sSteam32ID[32];
-		for(new i = 1; i <= MaxClients; i++)
+		for(int i = 1; i <= MaxClients; i++)
 		{
 			if(IsClientInGame(i) && !IsFakeClient(i) && IsClientAuthorized(i) &&
 				GetClientAuthId(i, AuthId_Steam2, sSteam32ID, sizeof(sSteam32ID)))
@@ -47,12 +51,15 @@ public OnPluginStart()
 	}
 }
 
-public OnPluginEnd()
+public void OnPluginEnd()
 {
 	RemoveMultiTargetFilter("@admins", Filter_Admin);
 	RemoveMultiTargetFilter("@!admins", Filter_NotAdmin);
 	RemoveMultiTargetFilter("@friends", Filter_Friends);
 	RemoveMultiTargetFilter("@!friends", Filter_NotFriends);
+	RemoveMultiTargetFilter("@random", Filter_Random);
+	RemoveMultiTargetFilter("@randomct", Filter_RandomCT);
+	RemoveMultiTargetFilter("@randomt", Filter_RandomT);
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -196,6 +203,80 @@ public bool Filter_NotFriends(const char[] sPattern, Handle hClients, int client
 	return true;
 }
 
+public bool Filter_Random(const char[] sPattern, Handle hClients, int client)
+{
+	int iRand = GetRandomInt(1, MaxClients);
+
+	if(IsClientInGame(iRand) && IsPlayerAlive(iRand))
+		PushArrayCell(hClients, iRand);
+	else
+		Filter_Random(sPattern, hClients, client);
+
+	return true;
+}
+
+public bool Filter_RandomCT(const char[] sPattern, Handle hClients, int client)
+{
+	int iCTCount = GetTeamClientCount(CS_TEAM_CT);
+
+	if(!iCTCount)
+		return false;
+
+	int[] iCTs = new int[iCTCount];
+
+	int iCurIndex;
+
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(!IsClientInGame(i) || GetClientTeam(i) != CS_TEAM_CT)
+			continue;
+
+		if(!IsPlayerAlive(i))
+		{
+			iCTCount--;
+			continue;
+		}
+
+		iCTs[iCurIndex] = i;
+		iCurIndex++;
+	}
+
+	PushArrayCell(hClients, iCTs[GetRandomInt(0, iCTCount-1)]);
+
+	return true;
+}
+
+public bool Filter_RandomT(const char[] sPattern, Handle hClients, int client)
+{
+	int iTCount = GetTeamClientCount(CS_TEAM_T);
+
+	if(!iTCount)
+		return false;
+
+	int[] iTs = new int[iTCount];
+
+	int iCurIndex;
+
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(!IsClientInGame(i) || GetClientTeam(i) != CS_TEAM_T)
+			continue;
+
+		if(!IsPlayerAlive(i))
+		{
+			iTCount--;
+			continue;
+		}
+
+		iTs[iCurIndex] = i;
+		iCurIndex++;
+	}
+
+	PushArrayCell(hClients, iTs[GetRandomInt(0, iTCount-1)]);
+
+	return true;
+}
+
 public void OnClientAuthorized(int client, const char[] auth)
 {
 	if(IsFakeClient(client))
@@ -225,7 +306,7 @@ public void OnClientDisconnect(int client)
 	g_FriendsArray[client] = INVALID_HANDLE;
 }
 
-public OnTransferComplete(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int client)
+public int OnTransferComplete(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int client)
 {
 	if(bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
@@ -247,7 +328,7 @@ public OnTransferComplete(Handle hRequest, bool bFailure, bool bRequestSuccessfu
 	APIWebResponse(sData, client);
 }
 
-public APIWebResponse(const char[] sData, int client)
+public void APIWebResponse(const char[] sData, int client)
 {
 	KeyValues Response = new KeyValues("SteamAPIResponse");
 	if(!Response.ImportFromString(sData, "SteamAPIResponse"))
@@ -284,52 +365,6 @@ public APIWebResponse(const char[] sData, int client)
 	while(Response.GotoNextKey());
 
 	delete Response;
-
-/* DEPRECATED JSON CODE
-	Handle hJSON = DecodeJSON(sData);
-	if(!hJSON)
-	{
-		LogError("DecodeJSON failed.");
-		return;
-	}
-
-	Handle hFriendslist = INVALID_HANDLE;
-	if(!JSONGetObject(hJSON, "friendslist", hFriendslist))
-	{
-		LogError("JSONGetObject(hJSON, \"friendslist\", hFriendslist) failed.");
-		DestroyJSON(hJSON);
-		return;
-	}
-
-	Handle hFriends = INVALID_HANDLE;
-	if(!JSONGetArray(hFriendslist, "friends", hFriends))
-	{
-		LogError("JSONGetObject(hFriendslist, \"friends\", hFriends) failed.");
-		DestroyJSON(hJSON);
-		return;
-	}
-
-	int ArraySize = GetArraySize(hFriends);
-	PrintToServer("ArraySize: %d", ArraySize);
-
-	for(int i = 0; i < ArraySize; i++)
-	{
-		Handle hEntry = INVALID_HANDLE;
-		JSONGetArrayObject(hFriends, i, hEntry);
-
-		static char sCommunityID[32];
-		if(!JSONGetString(hEntry, "steamid", sCommunityID, sizeof(sCommunityID)))
-		{
-			LogError("JSONGetString(hArray, \"steamid\", sCommunityID, %d) failed.", sizeof(sCommunityID));
-			DestroyJSON(hJSON);
-			return;
-		}
-
-		PushArrayCell(g_FriendsArray[client], Steam64toSteam3(sCommunityID));
-	}
-
-	DestroyJSON(hJSON);
-*/
 }
 
 
@@ -400,8 +435,8 @@ stock int Steam64toSteam3(const char[] sSteam64ID)
 
 public int Native_IsClientFriend(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
-	new friend = GetNativeCell(2);
+	int client = GetNativeCell(1);
+	int friend = GetNativeCell(2);
 
 	if(client > MaxClients || client <= 0 || friend > MaxClients || friend <= 0)
 	{
@@ -437,7 +472,7 @@ public int Native_IsClientFriend(Handle plugin, int numParams)
 
 public int Native_ReadClientFriends(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 
 	if(client > MaxClients || client <= 0)
 	{
