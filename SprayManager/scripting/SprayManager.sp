@@ -1303,9 +1303,9 @@ public Action Command_AdminSpray(int client, int argc)
 
 public Action Command_SprayBan(int client, int argc)
 {
-	if (argc < 1)
+	if (argc < 2)
 	{
-		ReplyToCommand(client, "[SprayManager] Usage: sm_sprayban <target> <time:optional> <reason:optional>");
+		ReplyToCommand(client, "[SprayManager] Usage: sm_sprayban <target> <time> <reason:optional>");
 		return Plugin_Handled;
 	}
 
@@ -1315,14 +1315,10 @@ public Action Command_SprayBan(int client, int argc)
 	char sReason[32];
 
 	GetCmdArg(1, sTarget, sizeof(sTarget));
+	GetCmdArg(2, sLength, sizeof(sLength));
 
-	if (argc > 1)
-	{
-		GetCmdArg(2, sLength, sizeof(sLength));
-
-		if (argc > 2)
-			GetCmdArg(3, sReason, sizeof(sReason));
-	}
+	if (argc > 2)
+		GetCmdArg(3, sReason, sizeof(sReason));
 
 	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
