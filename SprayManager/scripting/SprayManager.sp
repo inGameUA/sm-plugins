@@ -65,7 +65,7 @@ public Plugin myinfo =
 	name		= "Spray Manager",
 	description	= "A plugin to help manage player sprays.",
 	author		= "Obus",
-	version		= "1.2.0",
+	version		= "1.2.1",
 	url			= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
@@ -2203,6 +2203,8 @@ bool TracePlayerAnglesRanged(int client, float fMaxDistance)
 
 		return true;
 	}
+	
+	CloseHandle(hTraceRay);
 
 	return false;
 }
