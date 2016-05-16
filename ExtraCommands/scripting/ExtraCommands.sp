@@ -15,6 +15,7 @@ bool g_bInfAmmoAll = false;
 bool g_bInfAmmo[MAXPLAYERS + 1] = {false, ...};
 
 ConVar g_CVar_sv_pausable;
+ConVar g_CVar_sv_bomb_anywhere;
 bool g_bPaused;
 
 public Plugin myinfo =
@@ -22,7 +23,7 @@ public Plugin myinfo =
 	name = "Advanced Commands",
 	author = "BotoX + Obus",
 	description = "Adds: hp, kevlar, weapon, strip, buyzone, iammo, speed, respawn and cash commands",
-	version = "1.1",
+	version = "1.2",
 	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
 
@@ -44,6 +45,7 @@ public void OnPluginStart()
 	HookEvent("bomb_defused", Event_BombDefused, EventHookMode_Pre);
 
 	g_CVar_sv_pausable = FindConVar("sv_pausable");
+	g_CVar_sv_bomb_anywhere = CreateConVar("sm_bombanywhere", "0", "Allows the bomb to be planted anywhere", FCVAR_REPLICATED);
 
 	if(g_CVar_sv_pausable)
 		AddCommandListener(Listener_Pause, "pause");
@@ -131,9 +133,12 @@ public void OnClientPutInServer(int client)
 
 public void OnPreThink(int client)
 {
-	if(IsClientInGame(client) && IsPlayerAlive(client))
+	if (g_CVar_sv_bomb_anywhere.IntValue >= 1)
 	{
-		SetEntProp(client, Prop_Send, "m_bInBombZone", 1);
+		if(IsClientInGame(client) && IsPlayerAlive(client))
+		{
+			SetEntProp(client, Prop_Send, "m_bInBombZone", 1);
+		}
 	}
 }
 
