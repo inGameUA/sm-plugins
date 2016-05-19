@@ -4,6 +4,8 @@
 #include <sdkhooks>
 #include <zombiereloaded>
 
+#pragma newdecls required
+
 public Plugin myinfo =
 {
 	name 			= "PlayerVisibility",

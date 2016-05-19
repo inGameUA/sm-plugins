@@ -127,6 +127,8 @@ public void OnEntityDestroyed(int entity)
 
 public void OnWeaponSpawned(int entity)
 {
+	SDKUnhook(entity, SDKHook_Spawn, OnWeaponSpawned);
+
 	int HammerID = GetEntProp(entity, Prop_Data, "m_iHammerID");
 	// Should not be cleaned since it's a map spawned weapon
 	if(HammerID)

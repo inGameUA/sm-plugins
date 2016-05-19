@@ -8,14 +8,14 @@
 			"engine"	"css"
 			"engine"	"csgo"
 		}
-		
+
 		"Addresses"
 		{
 			"CBaseServer"
 			{
 				"windows"
 				{
-					"signature"	"CVEngineServer::CreateFakeClient"				
+					"signature"	"CVEngineServer::CreateFakeClient"
 					"read"		"8"
 				}
 				"linux"
@@ -28,7 +28,7 @@
 				}
 			}
 		}
-		
+
 		"Signatures"
 		{
 			"CVEngineServer::CreateFakeClient"
@@ -36,7 +36,7 @@
 				"library"	"engine"
 				"windows"	"\x55\x8B\xEC\xFF\x75\x08\xB9\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x85\xC0\x75\x04"
 			}
-			
+
 			"sv"
 			{
 				"library"	"engine"
@@ -45,7 +45,7 @@
 			}
 		}
 	}
-	
+
 	"#default"
 	{
 		"#supported"
@@ -54,14 +54,14 @@
 			"engine"	"left4dead"
 			"engine"	"left4dead2"
 		}
-		
+
 		"Addresses"
 		{
 			"CBaseServer"
 			{
 				"windows"
 				{
-					"signature"	"CVEngineServer::CreateFakeClient"				
+					"signature"	"CVEngineServer::CreateFakeClient"
 					"read"		"6"
 				}
 				"linux"
@@ -74,7 +74,7 @@
 				}
 			}
 		}
-		
+
 		"Signatures"
 		{
 			"CVEngineServer::CreateFakeClient"
@@ -82,7 +82,7 @@
 				"library"	"engine"
 				"windows"	"\x8B\x44\x24\x04\x50\xB9\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x85\xC0"
 			}
-			
+
 			"sv"
 			{
 				"library"	"engine"
@@ -91,7 +91,7 @@
 			}
 		}
 	}
-	
+
 	"#default"
 	{
 		"#supported"
@@ -100,7 +100,7 @@
 			"engine"	"orangebox_valve"
 			"engine"	"css"
 		}
-		
+
 		"Offsets"
 		{
 			"CBaseServer::GetClient"
@@ -109,14 +109,14 @@
 				"linux"		"7"
 				"mac"		"7"
 			}
-			
+
 			"CBaseClient::GetPlayerSlot"
 			{
 				"windows"	"14"
 				"linux"		"15"
 				"mac"		"15"
 			}
-			
+
 			"CGameClient::ProcessVoiceData"
 			{
 				"windows"	"7"
@@ -125,7 +125,7 @@
 			}
 		}
 	}
-	
+
 	"#default"
 	{
 		"#supported"
@@ -134,7 +134,7 @@
 			"engine"	"left4dead2"
 			"engine"	"csgo"
 		}
-		
+
 		"Offsets"
 		{
 			"CBaseServer::GetClient"
@@ -143,14 +143,14 @@
 				"linux"		"7"
 				"mac"		"7"
 			}
-			
+
 			"CBaseClient::GetPlayerSlot"
 			{
 				"windows"	"14"
 				"linux"		"15"
 				"mac"		"15"
 			}
-			
+
 			"CGameClient::ProcessVoiceData"
 			{
 				"windows"	"8"
@@ -159,6 +159,7 @@
 			}
 		}
 	}
+
 	"csgo"
 	{
 		"Offsets"
@@ -167,6 +168,33 @@
 			{
 				"windows"	"513"
 				"linux"		"514"
+				"mac"		"514"
+			}
+		}
+	}
+
+	"left4dead"
+	{
+		"Offsets"
+		{
+			"OnVoiceTransmit"
+			{
+				"windows"	"461"
+				"linux"		"462"
+				"mac"		"462"
+			}
+		}
+	}
+
+	"left4dead2"
+	{
+		"Offsets"
+		{
+			"OnVoiceTransmit"
+			{
+				"windows"	"485"
+				"linux"		"486"
+				"mac"		"486"
 			}
 		}
 	}

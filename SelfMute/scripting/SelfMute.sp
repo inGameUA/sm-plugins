@@ -18,8 +18,9 @@ bool g_Plugin_ccc = false;
 bool g_Plugin_zombiereloaded = false;
 bool g_Plugin_voiceannounce_ex = false;
 bool g_Plugin_AdvancedTargeting = false;
+bool g_bIsProtoBuf = false;
 
-#define PLUGIN_VERSION "2.1"
+#define PLUGIN_VERSION "2.2"
 
 public Plugin myinfo =
 {
@@ -62,6 +63,9 @@ public void OnPluginStart()
 	HookEvent("round_end", Event_Round);
 	HookEvent("player_team", Event_TeamChange);
 
+	if(GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf)
+		g_bIsProtoBuf = true;
+
 	UserMsg RadioText = GetUserMessageId("RadioText");
 	if(RadioText == INVALID_MESSAGE_ID)
 		SetFailState("This game doesn't support RadioText user messages.");
@@ -81,7 +85,8 @@ public void OnAllPluginsLoaded()
 	g_Plugin_zombiereloaded = LibraryExists("zombiereloaded");
 	g_Plugin_voiceannounce_ex = LibraryExists("voiceannounce_ex");
 	g_Plugin_AdvancedTargeting = LibraryExists("AdvancedTargeting");
-	LogMessage("CCC: %s\nZombieReloaded: %s\nVoiceAnnounce: %s\nAdvancedTargeting: %s",
+	LogMessage("SelfMute capabilities:\nProtoBuf: %s\nCCC: %s\nZombieReloaded: %s\nVoiceAnnounce: %s\nAdvancedTargeting: %s",
+		(g_bIsProtoBuf ? "yes" : "no"),
 		(g_Plugin_ccc ? "loaded" : "not loaded"),
 		(g_Plugin_zombiereloaded ? "loaded" : "not loaded"),
 		(g_Plugin_voiceannounce_ex ? "loaded" : "not loaded"),
@@ -818,13 +823,26 @@ int g_MsgPlayers[MAXPLAYERS + 1];
 
 public Action Hook_UserMessageRadioText(UserMsg msg_id, Handle bf, const int[] players, int playersNum, bool reliable, bool init)
 {
-	g_MsgDest = BfReadByte(bf);
-	g_MsgClient = BfReadByte(bf);
-	BfReadString(bf, g_MsgName, sizeof(g_MsgName), false);
-	BfReadString(bf, g_MsgParam1, sizeof(g_MsgParam1), false);
-	BfReadString(bf, g_MsgParam2, sizeof(g_MsgParam2), false);
-	BfReadString(bf, g_MsgParam3, sizeof(g_MsgParam3), false);
-	BfReadString(bf, g_MsgParam4, sizeof(g_MsgParam4), false);
+	if(g_bIsProtoBuf)
+	{
+		g_MsgDest = PbReadInt(bf, "msg_dst");
+		g_MsgClient = PbReadInt(bf, "client");
+		PbReadString(bf, "msg_name", g_MsgName, sizeof(g_MsgName));
+		PbReadString(bf, "params", g_MsgParam1, sizeof(g_MsgParam1), 0);
+		PbReadString(bf, "params", g_MsgParam2, sizeof(g_MsgParam2), 1);
+		PbReadString(bf, "params", g_MsgParam3, sizeof(g_MsgParam3), 2);
+		PbReadString(bf, "params", g_MsgParam4, sizeof(g_MsgParam4), 3);
+	}
+	else
+	{
+		g_MsgDest = BfReadByte(bf);
+		g_MsgClient = BfReadByte(bf);
+		BfReadString(bf, g_MsgName, sizeof(g_MsgName), false);
+		BfReadString(bf, g_MsgParam1, sizeof(g_MsgParam1), false);
+		BfReadString(bf, g_MsgParam2, sizeof(g_MsgParam2), false);
+		BfReadString(bf, g_MsgParam3, sizeof(g_MsgParam3), false);
+		BfReadString(bf, g_MsgParam4, sizeof(g_MsgParam4), false);
+	}
 
 	// Check which clients need to be excluded.
 	g_MsgPlayersNum = 0;
@@ -857,7 +875,10 @@ public Action Hook_UserMessageSendAudio(UserMsg msg_id, Handle bf, const int[] p
 	else if(g_MsgClient == -2)
 		return Plugin_Handled;
 
-	BfReadString(bf, g_MsgRadioSound, sizeof(g_MsgRadioSound), false);
+	if(g_bIsProtoBuf)
+		PbReadString(bf, "radio_sound", g_MsgRadioSound, sizeof(g_MsgRadioSound));
+	else
+		BfReadString(bf, g_MsgRadioSound, sizeof(g_MsgRadioSound), false);
 
 	if(StrEqual(g_MsgRadioSound, "radio.locknload"))
 		return Plugin_Continue;
@@ -904,17 +925,33 @@ public void OnPlayerRadio(DataPack pack)
 	CloseHandle(pack);
 
 	Handle RadioText = StartMessage("RadioText", g_MsgPlayers, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
-	BfWriteByte(RadioText, g_MsgDest);
-	BfWriteByte(RadioText, g_MsgClient);
-	BfWriteString(RadioText, g_MsgName);
-	BfWriteString(RadioText, g_MsgParam1);
-	BfWriteString(RadioText, g_MsgParam2);
-	BfWriteString(RadioText, g_MsgParam3);
-	BfWriteString(RadioText, g_MsgParam4);
+	if(g_bIsProtoBuf)
+	{
+		PbSetInt(RadioText, "msg_dst", g_MsgDest);
+		PbSetInt(RadioText, "client", g_MsgClient);
+		PbSetString(RadioText, "msg_name", g_MsgName);
+		PbSetString(RadioText, "params", g_MsgParam1, 0);
+		PbSetString(RadioText, "params", g_MsgParam2, 1);
+		PbSetString(RadioText, "params", g_MsgParam3, 2);
+		PbSetString(RadioText, "params", g_MsgParam4, 3);
+	}
+	else
+	{
+		BfWriteByte(RadioText, g_MsgDest);
+		BfWriteByte(RadioText, g_MsgClient);
+		BfWriteString(RadioText, g_MsgName);
+		BfWriteString(RadioText, g_MsgParam1);
+		BfWriteString(RadioText, g_MsgParam2);
+		BfWriteString(RadioText, g_MsgParam3);
+		BfWriteString(RadioText, g_MsgParam4);
+	}
 	EndMessage();
 
 	Handle SendAudio = StartMessage("SendAudio", g_MsgPlayers, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
-	BfWriteString(SendAudio, g_MsgRadioSound);
+	if(g_bIsProtoBuf)
+		PbSetString(SendAudio, "radio_sound", g_MsgRadioSound);
+	else
+		BfWriteString(SendAudio, g_MsgRadioSound);
 	EndMessage();
 }
 

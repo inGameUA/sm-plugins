@@ -11,7 +11,7 @@ public Plugin myinfo =
 	name		= "Spectate",
 	description	= "Adds a command to spectate specific players and removes broken spectate mode.",
 	author		= "Obus + BotoX",
-	version		= "1.0",
+	version		= "1.0.1",
 	url			= ""
 }
 
@@ -49,7 +49,7 @@ public void OnClientSettingsChanged(int client)
 	if (iObserverMode == OBS_MODE_POI)
 	{
 		ClientCommand(client, "cl_spec_mode %d", OBS_MODE_ROAMING);
-		if(IsClientInGame(client))
+		if(IsClientInGame(client) && !IsPlayerAlive(client))
 			SetEntProp(client, Prop_Send, "m_iObserverMode", OBS_MODE_ROAMING);
 	}
 }
