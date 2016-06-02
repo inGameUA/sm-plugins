@@ -7,11 +7,11 @@
 
 public Plugin myinfo =
 {
-	name		= "Teleport Commands",
+	name 		= "Teleport Commands",
 	author		= "Obus",
 	description	= "Adds commands to teleport players.",
-	version		= "1.0",
-	url			= ""
+	version		= "1.1",
+	url			= "https://github.com/CSSZombieEscape/sm-plugins/blob/master/Teleport/"
 }
 
 public void OnPluginStart()
@@ -59,7 +59,8 @@ public Action Command_Bring(int client, int argc)
 		TeleportEntity(iTargets[i], vecClientPos, NULL_VECTOR, NULL_VECTOR);
 	}
 
-	PrintToChatAll("\x01[SM] \x04%N\x01: Brought \x04%s\x01.", client, sTargetName);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Brought \x04%s\x01.", sTargetName);
+	LogAction(client, -1, "Brought %s", sTargetName);
 
 	return Plugin_Handled;
 }
@@ -102,7 +103,9 @@ public Action Command_Goto(int client, int argc)
 				}
 
 				TeleportEntity(client, vecEndPos, NULL_VECTOR, NULL_VECTOR);
-				PrintToChatAll("\x01[SM] \x04%N\x01: Teleported to their crosshair.", client);
+				
+				ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported to their crosshair.");
+				LogAction(client, -1, "Teleported to their crosshair");
 
 				return Plugin_Handled;
 			}
@@ -121,13 +124,15 @@ public Action Command_Goto(int client, int argc)
 			}
 
 			TeleportEntity(client, vecEndPos, NULL_VECTOR, NULL_VECTOR);
-			PrintToChatAll("\x01[SM] \x04%N\x01: Teleported to their crosshair.", client);
+			
+			ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported to their crosshair.");
+			LogAction(client, -1, "Teleported to their crosshair");
 
 			return Plugin_Handled;
 		}
 	}
 
-	if (!(iTarget = FindTarget(client, sTarget)))
+	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
 	float vecTargetPos[3];
@@ -136,7 +141,8 @@ public Action Command_Goto(int client, int argc)
 
 	TeleportEntity(client, vecTargetPos, NULL_VECTOR, NULL_VECTOR);
 
-	PrintToChatAll("\x01[SM] \x04%N\x01: Teleported to \x04%N\x01.", client, iTarget);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported to \x04%N\x01.", iTarget);
+	LogAction(client, iTarget, "Teleported to %N", iTarget);
 
 	return Plugin_Handled;
 }
@@ -188,12 +194,13 @@ public Action Command_Send(int client, int argc)
 			TeleportEntity(iTargets[i], vecEndPos, NULL_VECTOR, NULL_VECTOR);
 		}
 
-		PrintToChatAll("\x01[SM] \x04%N\x01: Teleported \x04%s\x01 to their crosshair.", client, sTargetName);
+		ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to their crosshair.", sTargetName);
+		LogAction(client, -1, "Teleported %s to their crosshair", sTargetName);
 
 		return Plugin_Handled;
 	}
 
-	if (!(iTarget = FindTarget(client, sTarget)))
+	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
 	GetClientAbsOrigin(iTarget, vecTargetPos);
@@ -203,7 +210,8 @@ public Action Command_Send(int client, int argc)
 		TeleportEntity(iTargets[i], vecTargetPos, NULL_VECTOR, NULL_VECTOR);
 	}
 
-	PrintToChatAll("\x01[SM] \x04%N\x01: Teleported \x04%s\x01 to \x04%N\x01.", client, sTargetName, iTarget);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to \x04%N\x01.", sTargetName, iTarget);
+	LogAction(client, iTarget, "Teleported %s to %N", sTargetName, iTarget);
 
 	return Plugin_Handled;
 }
@@ -238,8 +246,9 @@ public Action Command_TpAim(int client, int argc)
 		TeleportEntity(iTargets[i], vecEndPos, NULL_VECTOR, NULL_VECTOR);
 	}
 
-	PrintToChatAll("\x01[SM] \x04%N\x01: Teleported \x04%s\x01 to their crosshair.", client, sTargetName);
-
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to their crosshair.", sTargetName);
+	LogAction(client, -1, "Teleported %s to their crosshair", sTargetName);
+	
 	return Plugin_Handled;
 }
 
