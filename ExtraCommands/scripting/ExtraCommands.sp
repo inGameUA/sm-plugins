@@ -15,16 +15,16 @@ bool g_bInfAmmoAll = false;
 bool g_bInfAmmo[MAXPLAYERS + 1] = {false, ...};
 
 ConVar g_CVar_sv_pausable;
-ConVar g_CVar_sv_bomb_anywhere;
+ConVar g_CVar_sv_bombanywhere;
 bool g_bPaused;
 
 public Plugin myinfo =
 {
-	name = "Advanced Commands",
-	author = "BotoX + Obus",
-	description = "Adds: hp, kevlar, weapon, strip, buyzone, iammo, speed, respawn and cash commands",
-	version = "1.2",
-	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
+	name 		= "Advanced Commands",
+	author 		= "BotoX + Obus",
+	description	= "Adds extra commands for admins.",
+	version 	= "1.4.2",
+	url 		= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
 
 public void OnPluginStart()
@@ -40,12 +40,20 @@ public void OnPluginStart()
 	RegAdminCmd("sm_speed", Command_Speed, ADMFLAG_GENERIC, "sm_speed <#userid|name> <0|1>");
 	RegAdminCmd("sm_respawn", Command_Respawn, ADMFLAG_GENERIC, "sm_respawn <#userid|name>");
 	RegAdminCmd("sm_cash", Command_Cash, ADMFLAG_GENERIC, "sm_cash <#userid|name> <value>");
+	RegAdminCmd("sm_modelscale", Command_ModelScale, ADMFLAG_GENERIC, "sm_modelscale <#userid|name> <scale>");
+	RegAdminCmd("sm_resize", Command_ModelScale, ADMFLAG_GENERIC, "sm_resize <#userid|name> <scale>");
+	RegAdminCmd("sm_setmodel", Command_SetModel, ADMFLAG_GENERIC, "sm_setmodel <#userid|name> <modelpath>");
+	RegAdminCmd("sm_waila", Command_WAILA, ADMFLAG_GENERIC);
+	RegAdminCmd("sm_getinfo", Command_WAILA, ADMFLAG_GENERIC);
+	RegAdminCmd("sm_getmodel", Command_WAILA, ADMFLAG_GENERIC);
 
 	HookEvent("bomb_planted", Event_BombPlanted, EventHookMode_Pre);
 	HookEvent("bomb_defused", Event_BombDefused, EventHookMode_Pre);
 
 	g_CVar_sv_pausable = FindConVar("sv_pausable");
-	g_CVar_sv_bomb_anywhere = CreateConVar("sm_bombanywhere", "0", "Allows the bomb to be planted anywhere", FCVAR_REPLICATED);
+	g_CVar_sv_bombanywhere = CreateConVar("sv_bombanywhere", "0", "Allows the bomb to be planted anywhere", FCVAR_NOTIFY);
+
+	AutoExecConfig(true, "plugin.extracommands");
 
 	if(g_CVar_sv_pausable)
 		AddCommandListener(Listener_Pause, "pause");
@@ -133,7 +141,7 @@ public void OnClientPutInServer(int client)
 
 public void OnPreThink(int client)
 {
-	if (g_CVar_sv_bomb_anywhere.IntValue >= 1)
+	if (g_CVar_sv_bombanywhere.IntValue >= 1)
 	{
 		if(IsClientInGame(client) && IsPlayerAlive(client))
 		{
@@ -657,22 +665,22 @@ public Action Command_Respawn(int client, int argc)
 
 	GetCmdArg(1, sArgs, sizeof(sArgs));
 
-	if ((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_DEAD, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_DEAD, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 	{
 		ReplyToTargetError(client, iTargetCount);
 		return Plugin_Handled;
 	}
 
-	for (int i = 0; i < iTargetCount; i++)
+	for(int i = 0; i < iTargetCount; i++)
 	{
-		if(GetClientTeam(iTargets[i]) == CS_TEAM_SPECTATOR)
+		if(GetClientTeam(iTargets[i]) == CS_TEAM_SPECTATOR || GetClientTeam(iTargets[i]) == CS_TEAM_NONE)
 			continue;
 
 		bDidRespawn = true;
 		CS_RespawnPlayer(iTargets[i]);
 	}
 
-	if (bDidRespawn)
+	if(bDidRespawn)
 	{
 		ShowActivity2(client, "\x01[SM] \x04", "\x01Respawned \x04%s", sTargetName);
 		LogAction(client, -1, "Respawned %s", sTargetName);
@@ -689,6 +697,7 @@ public Action Command_Cash(int client, int argc)
 		return Plugin_Handled;
 	}
 
+	int iCash;
 	char sArgs[64];
 	char sArgs2[32];
 	char sTargetName[MAX_TARGET_LENGTH];
@@ -699,19 +708,169 @@ public Action Command_Cash(int client, int argc)
 	GetCmdArg(1, sArgs, sizeof(sArgs));
 	GetCmdArg(2, sArgs2, sizeof(sArgs2));
 
-	if ((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_NO_BOTS, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	iCash = StringToInt(sArgs2);
+
+	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_ALIVE, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 	{
 		ReplyToTargetError(client, iTargetCount);
 		return Plugin_Handled;
 	}
 
-	for (int i = 0; i < iTargetCount; i++)
+	for(int i = 0; i < iTargetCount; i++)
 	{
-		SetEntProp(iTargets[i], Prop_Send, "m_iAccount", StringToInt(sArgs2));
+		SetEntProp(iTargets[i], Prop_Send, "m_iAccount", iCash);
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Set \x04%s\x01's cash to \x04%i", sTargetName, StringToInt(sArgs2));
 	LogAction(client, -1, "Set %s's cash to %i", sTargetName, StringToInt(sArgs2));
 
 	return Plugin_Handled;
+}
+
+public Action Command_ModelScale(int client, int argc)
+{
+	if(argc < 2)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_resize/sm_modelscale <#userid|name> <scale>");
+		return Plugin_Handled;
+	}
+
+	float fScale;
+	char sArgs[64];
+	char sArgs2[32];
+	char sTargetName[MAX_TARGET_LENGTH];
+	int iTargets[MAXPLAYERS];
+	int iTargetCount;
+	bool bIsML;
+
+	GetCmdArg(1, sArgs, sizeof(sArgs));
+	GetCmdArg(2, sArgs2, sizeof(sArgs2));
+
+	fScale = StringToFloat(sArgs2);
+
+	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_ALIVE, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	{
+		ReplyToTargetError(client, iTargetCount);
+		return Plugin_Handled;
+	}
+
+	for(int i = 0; i < iTargetCount; i++)
+	{
+		SetEntPropFloat(iTargets[i], Prop_Send, "m_flModelScale", fScale);
+	}
+
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Set \x04%s\x01's model scale to \x04%.2f", sTargetName, fScale);
+	LogAction(client, -1, "Set %s's model scale to %.2f", sTargetName, fScale);
+
+	return Plugin_Handled;
+}
+
+public Action Command_SetModel(int client, int argc)
+{
+	if(argc < 2)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_setmodel <#userid|name> <modelpath>");
+		return Plugin_Handled;
+	}
+
+	char sArgs[32];
+	char sArgs2[PLATFORM_MAX_PATH];
+	char sTargetName[MAX_TARGET_LENGTH];
+	int iTargets[MAXPLAYERS];
+	int iTargetCount;
+	bool bIsML;
+
+	GetCmdArg(1, sArgs, sizeof(sArgs));
+	GetCmdArg(2, sArgs2, sizeof(sArgs2));
+
+	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_ALIVE, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	{
+		ReplyToTargetError(client, iTargetCount);
+		return Plugin_Handled;
+	}
+
+	if(!FileExists(sArgs2, true))
+	{
+		ReplyToCommand(client, "[SM] File \"%s\" does not exist.", sArgs2);
+		return Plugin_Handled;
+	}
+
+	if(!IsModelPrecached(sArgs2))
+	{
+		ReplyToCommand(client, "[SM] File \"%s\" is not precached, attempting to precache now.", sArgs2);
+
+		PrecacheModel(sArgs2);
+	}
+
+	for (int i = 0; i < iTargetCount; i++)
+	{
+		SetEntityModel(iTargets[i], sArgs2);
+	}
+
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Set \x04%s\x01's model to \x04%s", sTargetName, sArgs2);
+	LogAction(client, -1, "Set %s's model to %s", sTargetName, sArgs2);
+
+	return Plugin_Handled;
+}
+
+public Action Command_WAILA(int client, int argc)
+{
+	if(!client)
+	{
+		PrintToServer("[SM] Cannot use command from server console.");
+		return Plugin_Handled;
+	}
+
+	float vecEyeAngles[3];
+	float vecEyeOrigin[3];
+
+	GetClientEyeAngles(client, vecEyeAngles);
+	GetClientEyePosition(client, vecEyeOrigin);
+
+	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_ALL, RayType_Infinite, TraceFilterCaller, client);
+
+	if(TR_DidHit(hTraceRay))
+	{
+		float vecEndPos[3];
+		char sModelPath[PLATFORM_MAX_PATH];
+		char sClsName[64];
+		char sNetClsName[64];
+		int iEntity;
+		int iEntityModelIdx;
+
+		TR_GetEndPosition(vecEndPos, hTraceRay);
+
+		if((iEntity = TR_GetEntityIndex(hTraceRay)) <= 0)
+		{
+			PrintToChat(client, "[SM] Trace hit the world.");
+
+			CloseHandle(hTraceRay);
+
+			return Plugin_Handled;
+		}
+
+		GetEntPropString(iEntity, Prop_Data, "m_ModelName", sModelPath, sizeof(sModelPath));
+		GetEntityClassname(iEntity, sClsName, sizeof(sClsName));
+		GetEntityNetClass(iEntity, sNetClsName, sizeof(sNetClsName));
+		iEntityModelIdx = GetEntProp(iEntity, Prop_Send, "m_nModelIndex");
+
+		PrintToConsole(client, "Entity Index: %i\nModel Path: %s\nModel Index: %i\nClass Name: %s\nNet Class Name: %s", iEntity, sModelPath, iEntityModelIdx, sClsName, sNetClsName);
+
+		PrintToChat(client, "[SM] Trace hit something, check your console for more information.");
+
+		CloseHandle(hTraceRay);
+
+		return Plugin_Handled;
+	}
+
+	CloseHandle(hTraceRay);
+
+	PrintToChat(client, "[SM] Couldn't find anything under your crosshair.");
+
+	return Plugin_Handled;
+}
+
+stock bool TraceFilterCaller(int entity, int contentsMask, int client)
+{
+	return entity != client;
 }
