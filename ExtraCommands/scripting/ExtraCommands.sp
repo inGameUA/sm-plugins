@@ -23,7 +23,7 @@ public Plugin myinfo =
 	name 		= "Advanced Commands",
 	author 		= "BotoX + Obus",
 	description	= "Adds extra commands for admins.",
-	version 	= "1.4.2",
+	version 	= "1.5",
 	url 		= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
 
@@ -46,6 +46,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_waila", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_getinfo", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_getmodel", Command_WAILA, ADMFLAG_GENERIC);
+	RegAdminCmd("sm_fcvar", Command_ForceCVar, ADMFLAG_CHEATS, "sm_fcvar <#userid|name> <cvar> <value>");
 
 	HookEvent("bomb_planted", Event_BombPlanted, EventHookMode_Pre);
 	HookEvent("bomb_defused", Event_BombDefused, EventHookMode_Pre);
@@ -873,4 +874,45 @@ public Action Command_WAILA(int client, int argc)
 stock bool TraceFilterCaller(int entity, int contentsMask, int client)
 {
 	return entity != client;
+}
+
+public Action Command_ForceCVar(int client, int argc)
+{
+	if(argc < 3)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_fcvar <#userid|name> <cvar> <value>");
+		return Plugin_Handled;
+	}
+
+	char sArg[65];
+	char sArg2[65];
+	char sArg3[65];
+	char sTargetName[MAX_TARGET_LENGTH];
+	int iTargets[MAXPLAYERS];
+	int iTargetCount;
+	bool bIsML;
+
+	GetCmdArg(1, sArg, sizeof(sArg));
+	GetCmdArg(2, sArg2, sizeof(sArg2));
+	GetCmdArg(3, sArg3, sizeof(sArg3));
+
+	ConVar cvar = FindConVar(sArg2);
+	if(cvar == null)
+	{
+		ReplyToCommand(client, "[SM] No such cvar.");
+		return Plugin_Handled;
+	}
+
+	if((iTargetCount = ProcessTargetString(sArg, client, iTargets, MAXPLAYERS, COMMAND_FILTER_NO_BOTS, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	{
+		ReplyToTargetError(client, iTargetCount);
+		return Plugin_Handled;
+	}
+
+	for (int i = 0; i < iTargetCount; i++)
+	{
+		cvar.ReplicateToClient(iTargets[i], sArg3);
+	}
+
+	return Plugin_Handled;
 }
