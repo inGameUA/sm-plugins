@@ -1,9 +1,8 @@
-#pragma semicolon 1
-
 #include <sourcemod>
 #include <sdkhooks>
 #include <zombiereloaded>
 
+#pragma semicolon 1
 #pragma newdecls required
 
 public Plugin myinfo =
@@ -11,7 +10,7 @@ public Plugin myinfo =
 	name 			= "PlayerVisibility",
 	author 			= "BotoX",
 	description 	= "Fades players away when you get close to them.",
-	version 		= "1.0",
+	version 		= "1.1",
 	url 			= ""
 };
 
@@ -77,34 +76,48 @@ public void OnPluginEnd()
 public void OnClientPutInServer(int client)
 {
 	g_Client_Alpha[client] = 255;
-	SDKHook(client, SDKHook_PostThink, OnPostThink);
+	SDKHook(client, SDKHook_PostThinkPost, OnPostThinkPost);
 }
 
 public void OnClientDisconnect(int client)
 {
 	g_Client_Alpha[client] = 255;
-	SDKUnhook(client, SDKHook_PostThink, OnPostThink);
+	SDKUnhook(client, SDKHook_PostThinkPost, OnPostThinkPost);
 }
 
-public void OnPostThink(client)
+public void OnPostThinkPost(int client)
 {
 	if(!IsPlayerAlive(client))
-		return;
-
-	if(!ZR_IsClientHuman(client))
 	{
 		if(g_Client_Alpha[client] != 255)
 		{
 			g_Client_Alpha[client] = 255;
-			if(GetEntityRenderMode(client) != RENDER_NONE)
-				ToolsSetEntityAlpha(client, 255);
+			ToolsSetEntityAlpha(client, 255);
 		}
 		return;
 	}
 
 	if(GetEntityRenderMode(client) == RENDER_NONE)
 	{
-		g_Client_Alpha[client] = 255;
+		g_Client_Alpha[client] = 0;
+		return;
+	}
+
+	int aColor[4];
+	ToolsGetEntityColor(client, aColor);
+	if(!aColor[3])
+	{
+		g_Client_Alpha[client] = 0;
+		return;
+	}
+
+	if(!ZR_IsClientHuman(client))
+	{
+		if(g_Client_Alpha[client] != 255)
+		{
+			g_Client_Alpha[client] = 255;
+			ToolsSetEntityAlpha(client, 255);
+		}
 		return;
 	}
 
@@ -146,7 +159,7 @@ public void OnPostThink(client)
 	ToolsSetEntityAlpha(client, Alpha);
 }
 
-void ToolsSetEntityAlpha(int client, int Alpha)
+stock void ToolsSetEntityAlpha(int client, int Alpha)
 {
 	if(Alpha == 255)
 	{
@@ -158,10 +171,10 @@ void ToolsSetEntityAlpha(int client, int Alpha)
 	ToolsGetEntityColor(client, aColor);
 
 	SetEntityRenderMode(client, RENDER_TRANSCOLOR);
-	SetEntityRenderColor(client, aColor[0], aColor[1], aColor[2], g_Client_Alpha[client]);
+	SetEntityRenderColor(client, aColor[0], aColor[1], aColor[2], Alpha);
 }
 
-stock ToolsGetEntityColor(int entity, int aColor[4])
+stock void ToolsGetEntityColor(int entity, int aColor[4])
 {
 	static bool s_GotConfig = false;
 	static char s_sProp[32];
