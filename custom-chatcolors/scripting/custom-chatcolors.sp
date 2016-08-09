@@ -2428,9 +2428,10 @@ public void OnClientDisconnect(int client)
 public void OnClientPostAdminCheck(int client)
 {
 	if (!ConfigForward(client))
-	{
 		return;
-	}
+
+	if (!CheckCommandAccess(client, "sm_tag", ADMFLAG_CUSTOM1))
+		return;
 
 	char auth[32];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
