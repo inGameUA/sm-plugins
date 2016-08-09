@@ -45,6 +45,7 @@ enum
 };
 
 bool g_Ignored[(MAXPLAYERS + 1) * (MAXPLAYERS + 1)];
+bool g_Exempt[MAXPLAYERS + 1][MAXPLAYERS + 1];
 int g_SpecialMutes[MAXPLAYERS + 1];
 
 char g_PlayerNames[MAXPLAYERS+1][MAX_NAME_LENGTH];
@@ -96,25 +97,29 @@ public void OnAllPluginsLoaded()
 public void OnClientPutInServer(int client)
 {
 	g_SpecialMutes[client] = MUTE_NONE;
-	for(int i = 1; i <= MaxClients; i++)
+	for(int i = 1; i < MAXPLAYERS; i++)
+	{
 		SetIgnored(client, i, false);
+		SetExempt(client, i, false);
+
+		SetIgnored(i, client, false);
+		SetExempt(i, client, false);
+	}
 
 	UpdateSpecialMutesOtherClients(client);
 	UpdateIgnored();
 }
 
-public void OnClientPostAdminCheck(int client)
-{
-	UpdateSpecialMutesOtherClients(client);
-	UpdateSpecialMutesThisClient(client);
-}
-
 public void OnClientDisconnect(int client)
 {
 	g_SpecialMutes[client] = MUTE_NONE;
-	for(int i = 1; i <= MaxClients; i++)
+	for(int i = 1; i < MAXPLAYERS; i++)
 	{
 		SetIgnored(client, i, false);
+		SetExempt(client, i, false);
+
+		SetIgnored(i, client, false);
+		SetExempt(i, client, false);
 
 		if(IsClientInGame(i) && !IsFakeClient(i) && i != client)
 			SetListenOverride(i, client, Listen_Yes);
@@ -188,7 +193,7 @@ void UpdateSpecialMutesOtherClients(int client)
 		else if(g_SpecialMutes[i] & MUTE_ALL)
 			Flags |= MUTE_ALL;
 
-		if(Flags)
+		if(Flags && !GetExempt(i, client))
 			SetListenOverride(i, client, Listen_No);
 		else if(!GetIgnored(i, client))
 			SetListenOverride(i, client, Listen_Yes);
@@ -234,7 +239,7 @@ void UpdateSpecialMutesThisClient(int client)
 		else if(g_SpecialMutes[client] & MUTE_ALL)
 			Flags |= MUTE_ALL;
 
-		if(Flags)
+		if(Flags && !GetExempt(client, i))
 			SetListenOverride(client, i, Listen_No);
 		else if(!GetIgnored(client, i))
 			SetListenOverride(client, i, Listen_Yes);
@@ -405,6 +410,18 @@ void UnIgnore(int client, int target)
 	SetListenOverride(client, target, Listen_Yes);
 }
 
+void Exempt(int client, int target)
+{
+	SetExempt(client, target, true);
+	UpdateSpecialMutesThisClient(client);
+}
+
+void UnExempt(int client, int target)
+{
+	SetExempt(client, target, false);
+	UpdateSpecialMutesThisClient(client);
+}
+
 /*
  * CHAT COMMANDS
 */
@@ -430,12 +447,6 @@ public Action Command_SelfMute(int client, int args)
 	StripQuotes(Filtered);
 	TrimString(Filtered);
 
-	if(StrEqual(Filtered, "@me", false))
-	{
-		PrintToChat(client, "\x04[Self-Mute]\x01 You can't mute yourself, don't be silly.");
-		return Plugin_Handled;
-	}
-
 	if(MuteSpecial(client, Filtered))
 		return Plugin_Handled;
 
@@ -458,10 +469,30 @@ public Action Command_SelfMute(int client, int args)
 		return Plugin_Handled;
 	}
 
+	if(TargetCount == 1)
+	{
+		if(aTargetList[0] == client)
+		{
+			PrintToChat(client, "\x04[Self-Mute]\x01 You can't mute yourself, don't be silly.");
+			return Plugin_Handled;
+		}
+
+		if(GetExempt(client, aTargetList[0]))
+		{
+			UnExempt(client, aTargetList[0]);
+
+			PrintToChat(client, "\x04[Self-Mute]\x01 You have removed exempt from self-mute:\x04 %s", sTargetName);
+
+			return Plugin_Handled;
+		}
+	}
+
 	for(int i = 0; i < TargetCount; i++)
 	{
-		if(aTargetList[i] != client)
-			Ignore(client, aTargetList[i]);
+		if(aTargetList[i] == client)
+			continue;
+
+		Ignore(client, aTargetList[i]);
 	}
 	UpdateIgnored();
 
@@ -492,12 +523,6 @@ public Action Command_SelfUnMute(int client, int args)
 	StripQuotes(Filtered);
 	TrimString(Filtered);
 
-	if(StrEqual(Filtered, "@me", false))
-	{
-		PrintToChat(client, "\x04[Self-Mute]\x01 Unmuting won't work either.");
-		return Plugin_Handled;
-	}
-
 	if(UnMuteSpecial(client, Filtered))
 		return Plugin_Handled;
 
@@ -520,10 +545,30 @@ public Action Command_SelfUnMute(int client, int args)
 		return Plugin_Handled;
 	}
 
+	if(TargetCount == 1)
+	{
+		if(aTargetList[0] == client)
+		{
+			PrintToChat(client, "\x04[Self-Mute]\x01 Unmuting won't work either.");
+			return Plugin_Handled;
+		}
+
+		if(!GetIgnored(client, aTargetList[0]))
+		{
+			Exempt(client, aTargetList[0]);
+
+			PrintToChat(client, "\x04[Self-Mute]\x01 You have exempted from self-mute:\x04 %s", sTargetName);
+
+			return Plugin_Handled;
+		}
+	}
+
 	for(int i = 0; i < TargetCount; i++)
 	{
-		if(aTargetList[i] != client)
-			UnIgnore(client, aTargetList[i]);
+		if(aTargetList[i] == client)
+			continue;
+
+		UnIgnore(client, aTargetList[i]);
 	}
 	UpdateIgnored();
 
@@ -540,32 +585,48 @@ public Action Command_CheckMutes(int client, int args)
 		return Plugin_Handled;
 	}
 
-	char aBuf[1024];
-	char aBuf2[MAX_NAME_LENGTH];
+	char aMuted[1024];
+	char aExempted[1024];
+	char aName[MAX_NAME_LENGTH];
 	for(int i = 1; i <= MaxClients; i++)
 	{
+		if(!IsClientInGame(i))
+			continue;
+
+		GetClientName(i, aName, sizeof(aName));
+
 		if(GetIgnored(client, i))
 		{
-			GetClientName(i, aBuf2, sizeof(aBuf2));
-			StrCat(aBuf, sizeof(aBuf), aBuf2);
-			StrCat(aBuf, sizeof(aBuf), ", ");
+			StrCat(aMuted, sizeof(aMuted), aName);
+			StrCat(aMuted, sizeof(aMuted), ", ");
+		}
+
+		if(GetExempt(client, i))
+		{
+			StrCat(aExempted, sizeof(aExempted), aName);
+			StrCat(aExempted, sizeof(aExempted), ", ");
 		}
 	}
 
-	// Cut off last ', '
-	if(strlen(aBuf))
+	if(strlen(aMuted))
 	{
-		aBuf[strlen(aBuf) - 2] = 0;
-		PrintToChat(client, "\x04[Self-Mute]\x01 You have self-muted:\x04 %s", aBuf);
+		aMuted[strlen(aMuted) - 2] = 0;
+		PrintToChat(client, "\x04[Self-Mute]\x01 You have self-muted:\x04 %s", aMuted);
 	}
-	else if(!g_SpecialMutes[client])
-		PrintToChat(client, "\x04[Self-Mute]\x01 You have not self-muted anyone!\x04", aBuf);
 
-	if(g_SpecialMutes[client])
+	if(g_SpecialMutes[client] != MUTE_NONE)
 	{
-		aBuf[0] = 0;
-		FormatSpecialMutes(g_SpecialMutes[client], aBuf, sizeof(aBuf));
-		PrintToChat(client, "\x04[Self-Mute]\x01 You have self-muted group:\x04 %s", aBuf);
+		aMuted[0] = 0;
+		FormatSpecialMutes(g_SpecialMutes[client], aMuted, sizeof(aMuted));
+		PrintToChat(client, "\x04[Self-Mute]\x01 You have self-muted group:\x04 %s", aMuted);
+	}
+	else if(!strlen(aMuted) && !strlen(aExempted))
+		PrintToChat(client, "\x04[Self-Mute]\x01 You have not self-muted anyone!");
+
+	if(strlen(aExempted))
+	{
+		aExempted[strlen(aExempted) - 2] = 0;
+		PrintToChat(client, "\x04[Self-Mute]\x01 You have exempted from self-mute:\x04 %s", aExempted);
 	}
 
 	return Plugin_Handled;
@@ -601,7 +662,7 @@ void DisplayMuteMenu(int client)
 			SortCustom1D(aClients, CurrentlyTalking, SortByPlayerName);
 
 			// insert players sorted
-			char aBuf[11];
+			char aBuf[12];
 			for(int i = 0; i < CurrentlyTalking; i++)
 			{
 				IntToString(GetClientUserId(aClients[i]), aBuf, sizeof(aBuf));
@@ -700,6 +761,11 @@ public int MenuHandler_MuteMenu(Menu menu, MenuAction action, int param1, int pa
 				UnIgnore(param1, client);
 				PrintToChat(param1, "\x04[Self-Mute]\x01 You have self-unmuted:\x04 %N", client);
 			}
+			else if(GetExempt(param1, client))
+			{
+				UnExempt(param1, client);
+				PrintToChat(param1, "\x04[Self-Mute]\x01 You have removed exempt from self-mute:\x04 %N", client);
+			}
 			else
 			{
 				Ignore(param1, client);
@@ -783,6 +849,14 @@ public int MenuHandler_MuteMenu(Menu menu, MenuAction action, int param1, int pa
 			if(GetIgnored(param1, client))
 			{
 				char aBuf[MAX_NAME_LENGTH + 4] = "[M] ";
+				GetClientName(client, g_PlayerNames[client], sizeof(g_PlayerNames[]));
+				StrCat(aBuf, sizeof(aBuf), g_PlayerNames[client]);
+				if(!StrEqual(aDisp, aBuf))
+					return RedrawMenuItem(aBuf);
+			}
+			else if(GetExempt(param1, client))
+			{
+				char aBuf[MAX_NAME_LENGTH + 4] = "[E] ";
 				GetClientName(client, g_PlayerNames[client], sizeof(g_PlayerNames[]));
 				StrCat(aBuf, sizeof(aBuf), g_PlayerNames[client]);
 				if(!StrEqual(aDisp, aBuf))
@@ -977,4 +1051,14 @@ bool GetIgnored(int client, int target)
 void SetIgnored(int client, int target, bool ignored)
 {
 	g_Ignored[(client * (MAXPLAYERS + 1) + target)] = ignored;
+}
+
+bool GetExempt(int client, int target)
+{
+	return g_Exempt[client][target];
+}
+
+void SetExempt(int client, int target, bool exempt)
+{
+	g_Exempt[client][target] = exempt;
 }
