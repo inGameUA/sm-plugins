@@ -1,8 +1,9 @@
-#pragma semicolon 1
-
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
+
+#pragma semicolon 1
+#pragma newdecls required
 
 #define TIMER_INTERVAL 1.0
 Handle g_hTimer = INVALID_HANDLE;
@@ -40,6 +41,12 @@ public void OnPluginStart()
 	HookEvent("round_start", Event_RoundStart);
 
 	AutoExecConfig(true, "plugin.WeaponCleaner");
+
+	for(int client = 1; client <= MaxClients; client++)
+	{
+		if(IsClientInGame(client))
+			OnClientPutInServer(client);
+	}
 }
 
 public void OnConVarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -246,9 +253,9 @@ bool CheckWeapons()
 	return true;
 }
 
-public Action Event_RoundStart(Handle:event, const char[] name, bool:dontBroadcast)
+public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	for(new i = 0; i < MAX_WEAPONS; i++)
+	for(int i = 0; i < MAX_WEAPONS; i++)
 	{
 		G_WeaponArray[i][0] = 0;
 		G_WeaponArray[i][1] = 0;
@@ -256,7 +263,7 @@ public Action Event_RoundStart(Handle:event, const char[] name, bool:dontBroadca
 	g_RealRoundStartedTime = GetTime() + GetConVarInt(FindConVar("mp_freezetime"));
 }
 
-public Action Timer_CleanupWeapons(Handle:timer)
+public Action Timer_CleanupWeapons(Handle timer)
 {
 	CheckWeapons();
 }
