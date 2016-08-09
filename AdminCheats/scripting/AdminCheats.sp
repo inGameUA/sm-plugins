@@ -1,8 +1,8 @@
-#pragma semicolon 1
-
 #include <sourcemod>
 
+#pragma semicolon 1
 #pragma newdecls required
+
 #define PLUGIN_VERSION "1.0"
 public Plugin myinfo =
 {
@@ -34,7 +34,7 @@ public void OnPluginStart()
 	{
 		if(IsCommand && Flags & FCVAR_CHEAT)
 		{
-			RegConsoleCmd(sConCommand, OnCheatCommand);
+			AddCommandListener(OnCheatCommand, sConCommand);
 			NumHooks++;
 		}
 	}
@@ -85,18 +85,18 @@ public void OnClientPostAdminCheck(int client)
 	if(IsFakeClient(client))
 		return;
 
-	if(g_CVar_sv_cheats.BoolValue && GetAdminFlag(GetUserAdmin(client), Admin_Cheats))
+	if(g_CVar_sv_cheats.BoolValue && CheckCommandAccess(client, "", ADMFLAG_CHEATS))
 		SendConVarValue(client, g_CVar_sv_cheats, "1");
 	else
 		SendConVarValue(client, g_CVar_sv_cheats, "0");
 }
 
-public Action OnCheatCommand(int client, int args)
+public Action OnCheatCommand(int client, const char[] command, int argc)
 {
 	if(client == 0)
 		return Plugin_Continue;
 
-	if(IsClientAuthorized(client) && GetAdminFlag(GetUserAdmin(client), Admin_Cheats))
+	if(IsClientAuthorized(client) && CheckCommandAccess(client, "", ADMFLAG_CHEATS))
 		return Plugin_Continue;
 
 	PrintToConsole(client, "denied :^)");
@@ -111,7 +111,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	if(impulse == 100 || impulse == 201)
 		return Plugin_Continue;
 
-	if(IsClientAuthorized(client) && GetAdminFlag(GetUserAdmin(client), Admin_Cheats))
+	if(IsClientAuthorized(client) && CheckCommandAccess(client, "", ADMFLAG_CHEATS))
 		return Plugin_Continue;
 
 	PrintToConsole(client, "denied :^)");
