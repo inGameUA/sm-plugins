@@ -1,8 +1,9 @@
-#pragma semicolon 1
-
 #include <sourcemod>
 #include <sdktools>
 #include <cstrike>
+
+#pragma semicolon 1
+#pragma newdecls required
 
 #define AFK_CHECK_INTERVAL 5.0
 
@@ -13,6 +14,7 @@ float g_Players_fEyePosition[MAXPLAYERS + 1][3];
 int g_Players_iButtons[MAXPLAYERS + 1];
 int g_Players_iSpecMode[MAXPLAYERS + 1];
 int g_Players_iSpecTarget[MAXPLAYERS + 1];
+bool g_Players_bTeleported[MAXPLAYERS + 1];
 
 float g_fKickTime;
 float g_fMoveTime;
@@ -26,33 +28,33 @@ public Plugin myinfo =
 	name = "Good AFK Manager",
 	author = "BotoX",
 	description = "A good AFK manager?",
-	version = "1.1",
+	version = "1.2",
 	url = ""
 };
 
-public void Cvar_KickTime(Handle:cvar, const char[] oldvalue, const char[] newvalue)
+public void Cvar_KickTime(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	g_fKickTime = GetConVarFloat(cvar);
+	g_fKickTime = GetConVarFloat(convar);
 }
-public void Cvar_MoveTime(Handle:cvar, const char[] oldvalue, const char[] newvalue)
+public void Cvar_MoveTime(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	g_fMoveTime = GetConVarFloat(cvar);
+	g_fMoveTime = GetConVarFloat(convar);
 }
-public void Cvar_WarnTime(Handle:cvar, const char[] oldvalue, const char[] newvalue)
+public void Cvar_WarnTime(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	g_fWarnTime = GetConVarFloat(cvar);
+	g_fWarnTime = GetConVarFloat(convar);
 }
-public void Cvar_KickMinPlayers(Handle:cvar, const char[] oldvalue, const char[] newvalue)
+public void Cvar_KickMinPlayers(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	g_iKickMinPlayers = GetConVarInt(cvar);
+	g_iKickMinPlayers = GetConVarInt(convar);
 }
-public void Cvar_MoveMinPlayers(Handle:cvar, const char[] oldvalue, const char[] newvalue)
+public void Cvar_MoveMinPlayers(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	g_iMoveMinPlayers = GetConVarInt(cvar);
+	g_iMoveMinPlayers = GetConVarInt(convar);
 }
-public void Cvar_Immunity(Handle:cvar, const char[] oldvalue, const char[] newvalue)
+public void Cvar_Immunity(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	g_iImmunity = GetConVarInt(cvar);
+	g_iImmunity = GetConVarInt(convar);
 }
 
 public void OnPluginStart()
@@ -82,12 +84,25 @@ public void OnPluginStart()
 	AddCommandListener(Command_Say, "say_team");
 	HookEvent("player_team", Event_PlayerTeamPost, EventHookMode_Post);
 
+	HookEntityOutput("trigger_teleport", "OnEndTouch", Teleport_OnEndTouch);
+
 	AutoExecConfig(true, "plugin.AfkManager");
 }
 
 public void OnMapStart()
 {
 	CreateTimer(AFK_CHECK_INTERVAL, Timer_CheckPlayer, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+
+	/* Handle late load */
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(IsClientConnected(i))
+		{
+			OnClientConnected(i);
+			if(IsClientInGame(i) && IsClientAuthorized(i))
+				OnClientPostAdminCheck(i);
+		}
+	}
 }
 
 int CheckAdminImmunity(int Index)
@@ -104,10 +119,11 @@ void ResetPlayer(int Index)
 	g_Players_bEnabled[Index] = false;
 	g_Players_bFlagged[Index] = false;
 	g_Players_iLastAction[Index] = 0;
-	g_Players_fEyePosition[Index] = Float:{0.0, 0.0, 0.0};
+	g_Players_fEyePosition[Index] = view_as<float>({0.0, 0.0, 0.0});
 	g_Players_iButtons[Index] = 0;
 	g_Players_iSpecMode[Index] = 0;
 	g_Players_iSpecTarget[Index] = 0;
+	g_Players_bTeleported[Index] = false;
 }
 
 void InitializePlayer(int Index)
@@ -143,7 +159,7 @@ public Action Event_PlayerTeamPost(Handle event, const char[] name, bool dontBro
 		g_Players_iLastAction[Index] = GetTime();
 }
 
-public Action Command_Say(Index, const char[] Command, Args)
+public Action Command_Say(int Index, const char[] Command, int Args)
 {
 	g_Players_iLastAction[Index] = GetTime();
 }
@@ -156,7 +172,12 @@ public Action OnPlayerRunCmd(int Index, int &iButtons, int &iImpulse, float fVel
 		&& g_Players_iSpecMode[Index] != 4) // OBS_MODE_IN_EYE
 	{
 		if(!((iButtons & IN_LEFT) || (iButtons & IN_RIGHT)))
-			g_Players_iLastAction[Index] = GetTime();
+		{
+			if(!g_Players_bTeleported[Index])
+				g_Players_iLastAction[Index] = GetTime();
+
+			g_Players_bTeleported[Index] = true;
+		}
 
 		g_Players_fEyePosition[Index] = fAngles;
 	}
@@ -166,6 +187,16 @@ public Action OnPlayerRunCmd(int Index, int &iButtons, int &iImpulse, float fVel
 		g_Players_iLastAction[Index] = GetTime();
 		g_Players_iButtons[Index] = iButtons;
 	}
+
+	return Plugin_Continue;
+}
+
+public Action Teleport_OnEndTouch(const char[] output, int caller, int activator, float delay)
+{
+	if(activator < 1 || activator > MaxClients)
+		return Plugin_Continue;
+
+	g_Players_bTeleported[activator] = true;
 
 	return Plugin_Continue;
 }
