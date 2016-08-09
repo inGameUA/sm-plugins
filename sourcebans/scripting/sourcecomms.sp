@@ -248,6 +248,9 @@ public OnMapStart()
 
 public OnMapEnd()
 {
+	if (!g_hDatabase)
+		return;
+
 	decl String:Query[2048];
 	Format(Query, sizeof(Query),
 		"UPDATE	%s_comms \
@@ -1459,7 +1462,7 @@ public Query_UnBlockSelect(Handle:owner, Handle:hndl, const String:error[], any:
 			if (type == TYPE_UNSILENCE)
 			{
 				// check result for possible combination with temp and time punishments (temp was skipped in code above)
-				SetPackPosition(data, 16);
+				SetPackPosition(data, DataPackPos:16);
 				if (g_MuteType[target] > bNot)
 				{
 					WritePackCell(data, TYPE_UNMUTE);
