@@ -97,7 +97,8 @@ public void OnPostThinkPost(int client)
 		return;
 	}
 
-	if(GetEntityRenderMode(client) == RENDER_NONE)
+	if(GetEntityRenderMode(client) == RENDER_NONE ||
+		GetEntityRenderFx(client) != RENDERFX_NONE)
 	{
 		g_Client_Alpha[client] = 0;
 		return;
@@ -194,5 +195,5 @@ stock void ToolsGetEntityColor(int entity, int aColor[4])
 	int Offset = GetEntSendPropOffs(entity, s_sProp);
 
 	for(int i = 0; i < 4; i++)
-		aColor[i] = GetEntData(entity, Offset + i, 1);
+		aColor[i] = GetEntData(entity, Offset + i, 1) & 0xFF;
 }
