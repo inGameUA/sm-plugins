@@ -76,7 +76,7 @@ forward OnMapVoteStart();
 /**
  * Called whenever vote ends
  */
-forward OnMapVoteEnd(const String:map[]);
+forward OnMapVoteEnd(const char[] map);
 
 /**
  * Is a map on the current game's official list?
@@ -85,18 +85,23 @@ forward OnMapVoteEnd(const String:map[]);
  * @param map 	Name of map to check
  * @return 		true if it's on the list of official maps for this game
  */
-native bool:IsMapOfficial(const String:map[]);
+native bool IsMapOfficial(const char[] map);
 
 /**
  * Is nominate allowed?
  * 
  * @return		A CanNominateResult corresponding to whether a vote is allowed or not
  */
-native CanNominateResult:CanNominate();
+native CanNominateResult CanNominate();
 
-native bool:ExcludeMap(const String:map[]);
+native bool ExcludeMap(const char[] map);
 
-public SharedPlugin:__pl_mapchooser_extended = 
+native int GetMapCooldown(const char[] map);
+native int GetMapMinPlayers(const char[] map);
+native int GetMapMaxPlayers(const char[] map);
+native int GetMapPlayerRestriction(const char[] map);
+
+public SharedPlugin __pl_mapchooser_extended = 
 {
 	name = "mapchooser",
 	file = "mapchooser_extended.smx",

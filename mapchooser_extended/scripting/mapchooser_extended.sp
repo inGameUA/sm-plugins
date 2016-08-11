@@ -36,14 +36,13 @@
 //#define DEBUG
 
 #if defined DEBUG
-	#define assert(%1) if (!(%1)) ThrowError("Debug Assertion Failed");
-	#define assert_msg(%1,%2) if (!(%1)) ThrowError(%2);
+	#define assert(%1) if(!(%1)) ThrowError("Debug Assertion Failed");
+	#define assert_msg(%1,%2) if(!(%1)) ThrowError(%2);
 #else
 	#define assert(%1)
 	#define assert_msg(%1,%2)
 #endif
 
-#pragma semicolon 1
 #include <sourcemod>
 #include <mapchooser>
 #include "include/mapchooser_extended"
@@ -53,9 +52,12 @@
 
 #undef REQUIRE_PLUGIN
 #include <nativevotes>
+#define REQUIRE_PLUGIN
 
-#define MCE_VERSION "1.11.0"
+#pragma semicolon 1
+#pragma newdecls required
 
+#define MCE_VERSION "1.12.0"
 #define NV "nativevotes"
 
 enum RoundCounting
@@ -81,7 +83,7 @@ enum
 	GunGameMode_DeathMatch	= 2,
 }
 
-public Plugin:myinfo =
+public Plugin myinfo =
 {
 	name = "MapChooser Extended",
 	author = "Powerlord, Zuko, and AlliedModders LLC",
@@ -91,102 +93,103 @@ public Plugin:myinfo =
 };
 
 /* Valve ConVars */
-new Handle:g_Cvar_Winlimit = INVALID_HANDLE;
-new Handle:g_Cvar_Maxrounds = INVALID_HANDLE;
-new Handle:g_Cvar_Fraglimit = INVALID_HANDLE;
-new Handle:g_Cvar_Bonusroundtime = INVALID_HANDLE;
-new Handle:g_Cvar_MatchClinch = INVALID_HANDLE;
-new Handle:g_Cvar_VoteNextLevel = INVALID_HANDLE;
-new Handle:g_Cvar_GameType = INVALID_HANDLE;
-new Handle:g_Cvar_GameMode = INVALID_HANDLE;
+ConVar g_Cvar_Winlimit;
+ConVar g_Cvar_Maxrounds;
+ConVar g_Cvar_Fraglimit;
+ConVar g_Cvar_Bonusroundtime;
+ConVar g_Cvar_MatchClinch;
+ConVar g_Cvar_VoteNextLevel;
+ConVar g_Cvar_GameType;
+ConVar g_Cvar_GameMode;
 
 /* Plugin ConVars */
-new Handle:g_Cvar_StartTime = INVALID_HANDLE;
-new Handle:g_Cvar_StartRounds = INVALID_HANDLE;
-new Handle:g_Cvar_StartFrags = INVALID_HANDLE;
-new Handle:g_Cvar_ExtendTimeStep = INVALID_HANDLE;
-new Handle:g_Cvar_ExtendRoundStep = INVALID_HANDLE;
-new Handle:g_Cvar_ExtendFragStep = INVALID_HANDLE;
-new Handle:g_Cvar_ExcludeMaps = INVALID_HANDLE;
-new Handle:g_Cvar_IncludeMaps = INVALID_HANDLE;
-new Handle:g_Cvar_NoVoteMode = INVALID_HANDLE;
-new Handle:g_Cvar_Extend = INVALID_HANDLE;
-new Handle:g_Cvar_DontChange = INVALID_HANDLE;
-new Handle:g_Cvar_EndOfMapVote = INVALID_HANDLE;
-new Handle:g_Cvar_VoteDuration = INVALID_HANDLE;
+ConVar g_Cvar_StartTime;
+ConVar g_Cvar_StartRounds;
+ConVar g_Cvar_StartFrags;
+ConVar g_Cvar_ExtendTimeStep;
+ConVar g_Cvar_ExtendRoundStep;
+ConVar g_Cvar_ExtendFragStep;
+ConVar g_Cvar_ExcludeMaps;
+ConVar g_Cvar_IncludeMaps;
+ConVar g_Cvar_NoVoteMode;
+ConVar g_Cvar_Extend;
+ConVar g_Cvar_DontChange;
+ConVar g_Cvar_EndOfMapVote;
+ConVar g_Cvar_VoteDuration;
 
-new Handle:g_VoteTimer = INVALID_HANDLE;
-new Handle:g_RetryTimer = INVALID_HANDLE;
-new Handle:g_WarningTimer = INVALID_HANDLE;
+Handle g_VoteTimer = INVALID_HANDLE;
+Handle g_RetryTimer = INVALID_HANDLE;
+Handle g_WarningTimer = INVALID_HANDLE;
 
 /* Data Handles */
-new Handle:g_MapList = INVALID_HANDLE;
-new Handle:g_NominateList = INVALID_HANDLE;
-new Handle:g_NominateOwners = INVALID_HANDLE;
-new Handle:g_OldMapList = INVALID_HANDLE;
-new Handle:g_NextMapList = INVALID_HANDLE;
-new Handle:g_VoteMenu = INVALID_HANDLE;
+Handle g_MapList = INVALID_HANDLE;
+Handle g_NominateList = INVALID_HANDLE;
+Handle g_NominateOwners = INVALID_HANDLE;
+StringMap g_OldMapList;
+Handle g_NextMapList = INVALID_HANDLE;
+Handle g_VoteMenu = INVALID_HANDLE;
+KeyValues g_Config;
 
-new g_Extends;
-new g_TotalRounds;
-new bool:g_HasVoteStarted;
-new bool:g_WaitingForVote;
-new bool:g_MapVoteCompleted;
-new bool:g_ChangeMapAtRoundEnd;
-new bool:g_ChangeMapInProgress;
-new bool:g_HasIntermissionStarted = false;
-new g_mapFileSerial = -1;
+int g_Extends;
+int g_TotalRounds;
+bool g_HasVoteStarted;
+bool g_WaitingForVote;
+bool g_MapVoteCompleted;
+bool g_ChangeMapAtRoundEnd;
+bool g_ChangeMapInProgress;
+bool g_HasIntermissionStarted = false;
+int g_mapFileSerial = -1;
 
-new g_NominateCount = 0;
-new MapChange:g_ChangeTime;
+int g_NominateCount = 0;
+MapChange g_ChangeTime;
 
-new Handle:g_NominationsResetForward = INVALID_HANDLE;
-new Handle:g_MapVoteStartedForward = INVALID_HANDLE;
+Handle g_NominationsResetForward = INVALID_HANDLE;
+Handle g_MapVoteStartedForward = INVALID_HANDLE;
 
 /* Mapchooser Extended Plugin ConVars */
 
-new Handle:g_Cvar_RunOff = INVALID_HANDLE;
-new Handle:g_Cvar_RunOffPercent = INVALID_HANDLE;
-new Handle:g_Cvar_BlockSlots = INVALID_HANDLE;
-new Handle:g_Cvar_MaxRunOffs = INVALID_HANDLE;
-new Handle:g_Cvar_StartTimePercent = INVALID_HANDLE;
-new Handle:g_Cvar_StartTimePercentEnable = INVALID_HANDLE;
-new Handle:g_Cvar_WarningTime = INVALID_HANDLE;
-new Handle:g_Cvar_RunOffWarningTime = INVALID_HANDLE;
-new Handle:g_Cvar_MenuStyle = INVALID_HANDLE;
-new Handle:g_Cvar_TimerLocation = INVALID_HANDLE;
-new Handle:g_Cvar_ExtendPosition = INVALID_HANDLE;
-new Handle:g_Cvar_MarkCustomMaps = INVALID_HANDLE;
-new Handle:g_Cvar_RandomizeNominations = INVALID_HANDLE;
-new Handle:g_Cvar_HideTimer = INVALID_HANDLE;
-new Handle:g_Cvar_NoVoteOption = INVALID_HANDLE;
+ConVar g_Cvar_RunOff;
+ConVar g_Cvar_RunOffPercent;
+ConVar g_Cvar_BlockSlots;
+ConVar g_Cvar_MaxRunOffs;
+ConVar g_Cvar_StartTimePercent;
+ConVar g_Cvar_StartTimePercentEnable;
+ConVar g_Cvar_WarningTime;
+ConVar g_Cvar_RunOffWarningTime;
+ConVar g_Cvar_MenuStyle;
+ConVar g_Cvar_TimerLocation;
+ConVar g_Cvar_ExtendPosition;
+ConVar g_Cvar_MarkCustomMaps;
+ConVar g_Cvar_RandomizeNominations;
+ConVar g_Cvar_HideTimer;
+ConVar g_Cvar_NoVoteOption;
 
 /* Mapchooser Extended Data Handles */
-new Handle:g_OfficialList = INVALID_HANDLE;
+Handle g_OfficialList = INVALID_HANDLE;
 
 /* Mapchooser Extended Forwards */
-new Handle:g_MapVoteWarningStartForward = INVALID_HANDLE;
-new Handle:g_MapVoteWarningTickForward = INVALID_HANDLE;
-new Handle:g_MapVoteStartForward = INVALID_HANDLE;
-new Handle:g_MapVoteEndForward = INVALID_HANDLE;
-new Handle:g_MapVoteRunoffStartForward = INVALID_HANDLE;
+Handle g_MapVoteWarningStartForward = INVALID_HANDLE;
+Handle g_MapVoteWarningTickForward = INVALID_HANDLE;
+Handle g_MapVoteStartForward = INVALID_HANDLE;
+Handle g_MapVoteEndForward = INVALID_HANDLE;
+Handle g_MapVoteRunoffStartForward = INVALID_HANDLE;
 
 /* Mapchooser Extended Globals */
-new g_RunoffCount = 0;
-new g_mapOfficialFileSerial = -1;
-new bool:g_NativeVotes = false;
-new String:g_GameModName[64];
-new bool:g_WarningInProgress = false;
-new bool:g_AddNoVote = false;
+int g_RunoffCount = 0;
+int g_mapOfficialFileSerial = -1;
+bool g_NativeVotes = false;
+char g_GameModName[64];
+bool g_WarningInProgress = false;
+bool g_AddNoVote = false;
 
-new RoundCounting:g_RoundCounting = RoundCounting_Standard;
+RoundCounting g_RoundCounting = RoundCounting_Standard;
 
 /* Upper bound of how many team there could be */
 #define MAXTEAMS 10
-new g_winCount[MAXTEAMS];
+int g_winCount[MAXTEAMS];
 
-new bool:g_BlockedSlots = false;
-new g_ObjectiveEnt = -1;
+bool g_BlockedSlots = false;
+int g_ObjectiveEnt = -1;
 
 enum TimerLocation
 {
@@ -210,17 +213,17 @@ enum WarningType
 #define LINE_SPACER "##linespacer##"
 #define FAILURE_TIMER_LENGTH 5
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	LoadTranslations("mapchooser_extended.phrases");
 	LoadTranslations("basevotes.phrases");
 	LoadTranslations("common.phrases");
 
-	new arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
+	int arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
 	g_MapList = CreateArray(arraySize);
 	g_NominateList = CreateArray(arraySize);
 	g_NominateOwners = CreateArray(1);
-	g_OldMapList = CreateArray(arraySize);
+	g_OldMapList = new StringMap();
 	g_NextMapList = CreateArray(arraySize);
 	g_OfficialList = CreateArray(arraySize);
 
@@ -271,14 +274,14 @@ public OnPluginStart()
 	g_Cvar_Maxrounds = FindConVar("mp_maxrounds");
 	g_Cvar_Fraglimit = FindConVar("mp_fraglimit");
 
-	new EngineVersion:version = GetEngineVersionCompat();
+	EngineVersion version = GetEngineVersion();
 
-	decl String:mapListPath[PLATFORM_MAX_PATH];
+	static char mapListPath[PLATFORM_MAX_PATH];
 
 	BuildPath(Path_SM, mapListPath, PLATFORM_MAX_PATH, "configs/mapchooser_extended/maps/%s.txt", g_GameModName);
 	SetMapListCompatBind("official", mapListPath);
 
-	switch (version)
+	switch(version)
 	{
 		case Engine_TF2:
 		{
@@ -310,9 +313,9 @@ public OnPluginStart()
 		}
 	}
 
-	if (g_Cvar_Winlimit != INVALID_HANDLE || g_Cvar_Maxrounds != INVALID_HANDLE)
+	if(g_Cvar_Winlimit != INVALID_HANDLE || g_Cvar_Maxrounds != INVALID_HANDLE)
 	{
-		switch (version)
+		switch(version)
 		{
 			case Engine_TF2:
 			{
@@ -347,19 +350,15 @@ public OnPluginStart()
 		}
 	}
 
-	if (g_Cvar_Fraglimit != INVALID_HANDLE)
-	{
+	if(g_Cvar_Fraglimit != INVALID_HANDLE)
 		HookEvent("player_death", Event_PlayerDeath);
-	}
 
 	AutoExecConfig(true, "mapchooser_extended");
 
 	//Change the mp_bonusroundtime max so that we have time to display the vote
 	//If you display a vote during bonus time good defaults are 17 vote duration and 19 mp_bonustime
-	if (g_Cvar_Bonusroundtime != INVALID_HANDLE)
-	{
+	if(g_Cvar_Bonusroundtime != INVALID_HANDLE)
 		SetConVarBounds(g_Cvar_Bonusroundtime, ConVarBound_Upper, true, 30.0);
-	}
 
 	g_NominationsResetForward = CreateGlobalForward("OnNominationRemoved", ET_Ignore, Param_String, Param_Cell);
 	g_MapVoteStartedForward = CreateGlobalForward("OnMapVoteStarted", ET_Ignore);
@@ -373,9 +372,9 @@ public OnPluginStart()
 
 }
 
-public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	if (LibraryExists("mapchooser"))
+	if(LibraryExists("mapchooser"))
 	{
 		strcopy(error, err_max, "MapChooser already loaded, aborting.");
 		return APLRes_Failure;
@@ -398,76 +397,91 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 	// MapChooser Extended natives
 	CreateNative("IsMapOfficial", Native_IsMapOfficial);
 	CreateNative("CanNominate", Native_CanNominate);
-
-	// BotoX
 	CreateNative("ExcludeMap", Native_ExcludeMap);
+	CreateNative("GetMapCooldown", Native_GetMapCooldown);
+	CreateNative("GetMapMinPlayers", Native_GetMapMinPlayers);
+	CreateNative("GetMapMaxPlayers", Native_GetMapMaxPlayers);
+	CreateNative("GetMapPlayerRestriction", Native_GetMapPlayerRestriction);
 
 	return APLRes_Success;
 }
 
-public OnAllPluginsLoaded()
+public void OnAllPluginsLoaded()
 {
 	g_NativeVotes = LibraryExists(NV) && NativeVotes_IsVoteTypeSupported(NativeVotesType_NextLevelMult);
 }
 
-public OnLibraryAdded(const String:name[])
+public void OnLibraryAdded(const char[] name)
 {
-	if (StrEqual(name, NV) && NativeVotes_IsVoteTypeSupported(NativeVotesType_NextLevelMult))
-	{
+	if(StrEqual(name, NV) && NativeVotes_IsVoteTypeSupported(NativeVotesType_NextLevelMult))
 		g_NativeVotes = true;
-	}
 }
 
-public OnLibraryRemoved(const String:name[])
+public void OnLibraryRemoved(const char[] name)
 {
-	if (StrEqual(name, NV))
-	{
+	if(StrEqual(name, NV))
 		g_NativeVotes = false;
-	}
 }
 
-public OnMapStart()
+public void OnMapStart()
 {
-	decl String:folder[64];
+	static char folder[64];
 	GetGameFolderName(folder, sizeof(folder));
 
 	g_RoundCounting = RoundCounting_Standard;
 	g_ObjectiveEnt = -1;
 
-	if (strcmp(folder, "tf") == 0 && GameRules_GetProp("m_bPlayingMannVsMachine"))
+	if(strcmp(folder, "tf") == 0 && GameRules_GetProp("m_bPlayingMannVsMachine"))
 	{
 		g_RoundCounting = RoundCounting_MvM;
 		g_ObjectiveEnt = EntIndexToEntRef(FindEntityByClassname(-1, "tf_objective_resource"));
 	}
-	else if (strcmp(folder, "csgo") == 0 && GetConVarInt(g_Cvar_GameType) == GameType_GunGame &&
+	else if(strcmp(folder, "csgo") == 0 && GetConVarInt(g_Cvar_GameType) == GameType_GunGame &&
 		GetConVarInt(g_Cvar_GameMode) == GunGameMode_ArmsRace)
 	{
 		g_RoundCounting = RoundCounting_ArmsRace;
 	}
+
+	if(g_Config)
+		delete g_Config;
+
+	char sConfigFile[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, sConfigFile, sizeof(sConfigFile), "configs/mapchooser_extended.cfg");
+	if(!FileExists(sConfigFile))
+	{
+		LogMessage("Could not find config: \"%s\"", sConfigFile);
+		return;
+	}
+	LogMessage("Found config: \"%s\"", sConfigFile);
+
+	g_Config = new KeyValues("mapchooser_extended");
+	if(!g_Config.ImportFromFile(sConfigFile))
+	{
+		delete g_Config;
+		LogMessage("ImportFromFile() failed!");
+		return;
+	}
+	g_Config.Rewind();
 }
 
-public OnConfigsExecuted()
+public void OnConfigsExecuted()
 {
-	if (ReadMapList(g_MapList,
+	if(ReadMapList(g_MapList,
 					 g_mapFileSerial,
 					 "mapchooser",
 					 MAPLIST_FLAG_CLEARARRAY|MAPLIST_FLAG_MAPSFOLDER)
 		!= INVALID_HANDLE)
 
 	{
-		if (g_mapFileSerial == -1)
-		{
+		if(g_mapFileSerial == -1)
 			LogError("Unable to create a valid map list.");
-		}
 	}
 
 	// Disable the next level vote in TF2 and CS:GO
 	// In TF2, this has two effects: 1. Stop the next level vote (which overlaps rtv functionality).
 	// 2. Stop the built-in end level vote.  This is the only thing that happens in CS:GO
-	if (g_Cvar_VoteNextLevel != INVALID_HANDLE)
-	{
+	if(g_Cvar_VoteNextLevel != INVALID_HANDLE)
 		SetConVarBool(g_Cvar_VoteNextLevel, false);
-	}
 
 	CreateNextVote();
 	SetupTimeleftTimer();
@@ -482,24 +496,20 @@ public OnConfigsExecuted()
 	ClearArray(g_NominateList);
 	ClearArray(g_NominateOwners);
 
-	for (new i=0; i<MAXTEAMS; i++)
-	{
+	for(int i = 0; i < MAXTEAMS; i++)
 		g_winCount[i] = 0;
-	}
 
 	/* Check if mapchooser will attempt to start mapvote during bonus round time */
-	if ((g_Cvar_Bonusroundtime != INVALID_HANDLE) && !GetConVarInt(g_Cvar_StartRounds))
+	if((g_Cvar_Bonusroundtime != INVALID_HANDLE) && !GetConVarInt(g_Cvar_StartRounds))
 	{
-		if (!GetConVarInt(g_Cvar_StartTime) && GetConVarFloat(g_Cvar_Bonusroundtime) <= GetConVarFloat(g_Cvar_VoteDuration))
-		{
+		if(!GetConVarInt(g_Cvar_StartTime) && GetConVarFloat(g_Cvar_Bonusroundtime) <= GetConVarFloat(g_Cvar_VoteDuration))
 			LogError("Warning - Bonus Round Time shorter than Vote Time. Votes during bonus round may not have time to complete");
-		}
 	}
 
 	InitializeOfficialMapList();
 }
 
-public OnMapEnd()
+public void OnMapEnd()
 {
 	g_HasVoteStarted = false;
 	g_WaitingForVote = false;
@@ -512,26 +522,45 @@ public OnMapEnd()
 	g_WarningTimer = INVALID_HANDLE;
 	g_RunoffCount = 0;
 
-	decl String:map[PLATFORM_MAX_PATH];
+	static char map[PLATFORM_MAX_PATH];
 	GetCurrentMap(map, PLATFORM_MAX_PATH);
-	PushArrayString(g_OldMapList, map);
 
-	if (GetArraySize(g_OldMapList) > GetConVarInt(g_Cvar_ExcludeMaps))
+	int Cooldown = InternalGetMapCooldown(map);
+	g_OldMapList.SetValue(map, Cooldown, true);
+
+	StringMapSnapshot OldMapListSnapshot = g_OldMapList.Snapshot();
+	for(int i = 0; i < OldMapListSnapshot.Length; i++)
 	{
-		RemoveFromArray(g_OldMapList, 0);
+		OldMapListSnapshot.GetKey(i, map, sizeof(map));
+		g_OldMapList.GetValue(map, Cooldown);
+
+		Cooldown--;
+		if(Cooldown > 0)
+			g_OldMapList.SetValue(map, Cooldown, true);
+		else
+			g_OldMapList.Remove(map);
 	}
+	delete OldMapListSnapshot;
 }
 
-public OnClientDisconnect(client)
+public void OnClientPutInServer(int client)
 {
-	new index = FindValueInArray(g_NominateOwners, client);
+	CheckMapPlayerRestriction();
+}
 
-	if (index == -1)
-	{
+public void OnClientDisconnect_Post(int client)
+{
+	CheckMapPlayerRestriction();
+}
+
+public void OnClientDisconnect(int client)
+{
+	int index = FindValueInArray(g_NominateOwners, client);
+
+	if(index == -1)
 		return;
-	}
 
-	new String:oldmap[PLATFORM_MAX_PATH];
+	char oldmap[PLATFORM_MAX_PATH];
 	GetArrayString(g_NominateList, index, oldmap, PLATFORM_MAX_PATH);
 	Call_StartForward(g_NominationsResetForward);
 	Call_PushString(oldmap);
@@ -543,18 +572,18 @@ public OnClientDisconnect(client)
 	g_NominateCount--;
 }
 
-public Action:Command_SetNextmap(client, args)
+public Action Command_SetNextmap(int client, int args)
 {
-	if (args < 1)
+	if(args < 1)
 	{
 		CReplyToCommand(client, "[MCE] Usage: sm_setnextmap <map>");
 		return Plugin_Handled;
 	}
 
-	decl String:map[PLATFORM_MAX_PATH];
+	static char map[PLATFORM_MAX_PATH];
 	GetCmdArg(1, map, PLATFORM_MAX_PATH);
 
-	if (!IsMapValid(map))
+	if(!IsMapValid(map))
 	{
 		CReplyToCommand(client, "[MCE] %t", "Map was not found", map);
 		return Plugin_Handled;
@@ -569,47 +598,43 @@ public Action:Command_SetNextmap(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_ReloadMaps(client, args)
+public Action Command_ReloadMaps(int client, int args)
 {
 	InitializeOfficialMapList();
 }
 
-public OnMapTimeLeftChanged()
+public void OnMapTimeLeftChanged()
 {
-	if (GetArraySize(g_MapList))
-	{
+	if(GetArraySize(g_MapList))
 		SetupTimeleftTimer();
-	}
 }
 
-SetupTimeleftTimer()
+void SetupTimeleftTimer()
 {
-	new time;
-	if (GetMapTimeLeft(time) && time > 0)
+	int time;
+	if(GetMapTimeLeft(time) && time > 0)
 	{
-		new startTime;
-		if (GetConVarBool(g_Cvar_StartTimePercentEnable))
+		int startTime;
+		if(GetConVarBool(g_Cvar_StartTimePercentEnable))
 		{
-			new timeLimit;
-			if (GetMapTimeLimit(timeLimit) && timeLimit > 0)
+			int timeLimit;
+			if(GetMapTimeLimit(timeLimit) && timeLimit > 0)
 			{
 				startTime = GetConVarInt(g_Cvar_StartTimePercent) * (timeLimit * 60) / 100;
 			}
 		}
 		else
-		{
 			startTime = GetConVarInt(g_Cvar_StartTime) * 60;
-		}
 
-		if (time - startTime < 0 && GetConVarBool(g_Cvar_EndOfMapVote) && !g_MapVoteCompleted && !g_HasVoteStarted)
+		if(time - startTime < 0 && GetConVarBool(g_Cvar_EndOfMapVote) && !g_MapVoteCompleted && !g_HasVoteStarted)
 		{
 			SetupWarningTimer(WarningType_Vote);
 		}
 		else
 		{
-			if (g_WarningTimer == INVALID_HANDLE)
+			if(g_WarningTimer == INVALID_HANDLE)
 			{
-				if (g_VoteTimer != INVALID_HANDLE)
+				if(g_VoteTimer != INVALID_HANDLE)
 				{
 					KillTimer(g_VoteTimer);
 					g_VoteTimer = INVALID_HANDLE;
@@ -622,32 +647,30 @@ SetupTimeleftTimer()
 	}
 }
 
-public Action:Timer_StartWarningTimer(Handle:timer)
+public Action Timer_StartWarningTimer(Handle timer)
 {
 	g_VoteTimer = INVALID_HANDLE;
 
-	if (!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
-	{
+	if(!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
 		SetupWarningTimer(WarningType_Vote);
-	}
 }
 
-public Action:Timer_StartMapVote(Handle:timer, Handle:data)
+public Action Timer_StartMapVote(Handle timer, Handle data)
 {
-	static timePassed;
+	static int timePassed;
 
 	// This is still necessary because InitiateVote still calls this directly via the retry timer
-	if (!GetArraySize(g_MapList) || !GetConVarBool(g_Cvar_EndOfMapVote) || g_MapVoteCompleted || g_HasVoteStarted)
+	if(!GetArraySize(g_MapList) || !GetConVarBool(g_Cvar_EndOfMapVote) || g_MapVoteCompleted || g_HasVoteStarted)
 	{
 		g_WarningTimer = INVALID_HANDLE;
 		return Plugin_Stop;
 	}
 
 	ResetPack(data);
-	new warningMaxTime = ReadPackCell(data);
-	new warningTimeRemaining = warningMaxTime - timePassed;
+	int warningMaxTime = ReadPackCell(data);
+	int warningTimeRemaining = warningMaxTime - timePassed;
 
-	new String:warningPhrase[32];
+	char warningPhrase[32];
 	ReadPackString(data, warningPhrase, sizeof(warningPhrase));
 
 	// Tick timer for external plugins
@@ -655,9 +678,9 @@ public Action:Timer_StartMapVote(Handle:timer, Handle:data)
 	Call_PushCell(warningTimeRemaining);
 	Call_Finish();
 
-	if (timePassed == 0 || !GetConVarBool(g_Cvar_HideTimer))
+	if(timePassed == 0 || !GetConVarBool(g_Cvar_HideTimer))
 	{
-		new TimerLocation:timerLocation = TimerLocation:GetConVarInt(g_Cvar_TimerLocation);
+		TimerLocation timerLocation = view_as<TimerLocation>(GetConVarInt(g_Cvar_TimerLocation));
 
 		switch(timerLocation)
 		{
@@ -678,55 +701,52 @@ public Action:Timer_StartMapVote(Handle:timer, Handle:data)
 		}
 	}
 
-	if (timePassed++ >= warningMaxTime)
+	if(timePassed++ >= warningMaxTime)
 	{
-		if (timer == g_RetryTimer)
+		if(timer == g_RetryTimer)
 		{
 			g_WaitingForVote = false;
 			g_RetryTimer = INVALID_HANDLE;
 		}
 		else
-		{
 			g_WarningTimer = INVALID_HANDLE;
-		}
 
 		timePassed = 0;
-		new MapChange:mapChange = MapChange:ReadPackCell(data);
-		new Handle:hndl = Handle:ReadPackCell(data);
+		MapChange mapChange = view_as<MapChange>(ReadPackCell(data));
+		Handle hndl = view_as<Handle>(ReadPackCell(data));
 
 		InitiateVote(mapChange, hndl);
 
 		return Plugin_Stop;
 	}
+
 	return Plugin_Continue;
 }
 
-public Event_TFRestartRound(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_TFRestartRound(Handle event, const char[] name, bool dontBroadcast)
 {
 	/* Game got restarted - reset our round count tracking */
 	g_TotalRounds = 0;
 }
 
-public Event_TeamPlayWinPanel(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_TeamPlayWinPanel(Handle event, const char[] name, bool dontBroadcast)
 {
-	if (g_ChangeMapAtRoundEnd)
+	if(g_ChangeMapAtRoundEnd)
 	{
 		g_ChangeMapAtRoundEnd = false;
 		CreateTimer(2.0, Timer_ChangeMap, INVALID_HANDLE, TIMER_FLAG_NO_MAPCHANGE);
 		g_ChangeMapInProgress = true;
 	}
 
-	new bluescore = GetEventInt(event, "blue_score");
-	new redscore = GetEventInt(event, "red_score");
+	int bluescore = GetEventInt(event, "blue_score");
+	int redscore = GetEventInt(event, "red_score");
 
 	if(GetEventInt(event, "round_complete") == 1 || StrEqual(name, "arena_win_panel"))
 	{
 		g_TotalRounds++;
 
-		if (!GetArraySize(g_MapList) || g_HasVoteStarted || g_MapVoteCompleted || !GetConVarBool(g_Cvar_EndOfMapVote))
-		{
+		if(!GetArraySize(g_MapList) || g_HasVoteStarted || g_MapVoteCompleted || !GetConVarBool(g_Cvar_EndOfMapVote))
 			return;
-		}
 
 		CheckMaxRounds(g_TotalRounds);
 
@@ -749,12 +769,12 @@ public Event_TeamPlayWinPanel(Handle:event, const String:name[], bool:dontBroadc
 	}
 }
 
-public Event_MvMWinPanel(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_MvMWinPanel(Handle event, const char[] name, bool dontBroadcast)
 {
-	if (GetEventInt(event, "winning_team") == 2)
+	if(GetEventInt(event, "winning_team") == 2)
 	{
-		new objectiveEnt = EntRefToEntIndex(g_ObjectiveEnt);
-		if (objectiveEnt != INVALID_ENT_REFERENCE)
+		int objectiveEnt = EntRefToEntIndex(g_ObjectiveEnt);
+		if(objectiveEnt != INVALID_ENT_REFERENCE)
 		{
 			g_TotalRounds = GetEntProp(g_ObjectiveEnt, Prop_Send, "m_nMannVsMachineWaveCount");
 			CheckMaxRounds(g_TotalRounds);
@@ -762,29 +782,27 @@ public Event_MvMWinPanel(Handle:event, const String:name[], bool:dontBroadcast)
 	}
 }
 
-public Event_Intermission(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_Intermission(Handle event, const char[] name, bool dontBroadcast)
 {
 	g_HasIntermissionStarted = true;
 }
 
-public Event_PhaseEnd(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_PhaseEnd(Handle event, const char[] name, bool dontBroadcast)
 {
 	/* announce_phase_end fires for both half time and the end of the map, but intermission fires first for end of the map. */
-	if (g_HasIntermissionStarted)
-	{
+	if(g_HasIntermissionStarted)
 		return;
-	}
 
 	/* No intermission yet, so this must be half time. Swap the score counters. */
-	new t_score = g_winCount[2];
+	int t_score = g_winCount[2];
 	g_winCount[2] =  g_winCount[3];
 	g_winCount[3] = t_score;
 }
 
-public Event_WeaponRank(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_WeaponRank(Handle event, const char[] name, bool dontBroadcast)
 {
-	new rank = GetEventInt(event, "weaponrank");
-	if (rank > g_TotalRounds)
+	int rank = GetEventInt(event, "weaponrank");
+	if(rank > g_TotalRounds)
 	{
 		g_TotalRounds = rank;
 		CheckMaxRounds(g_TotalRounds);
@@ -792,46 +810,35 @@ public Event_WeaponRank(Handle:event, const String:name[], bool:dontBroadcast)
 }
 
 /* You ask, why don't you just use team_score event? And I answer... Because CSS doesn't. */
-public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_RoundEnd(Handle event, const char[] name, bool dontBroadcast)
 {
-	if (g_RoundCounting == RoundCounting_ArmsRace)
-	{
+	if(g_RoundCounting == RoundCounting_ArmsRace)
 		return;
-	}
 
-	if (g_ChangeMapAtRoundEnd)
+	if(g_ChangeMapAtRoundEnd)
 	{
 		g_ChangeMapAtRoundEnd = false;
 		CreateTimer(2.0, Timer_ChangeMap, INVALID_HANDLE, TIMER_FLAG_NO_MAPCHANGE);
 		g_ChangeMapInProgress = true;
 	}
 
-	new winner;
-	if (strcmp(name, "round_win") == 0 || strcmp(name, "dod_round_win") == 0)
-	{
-		// Nuclear Dawn & DoD:S
-		winner = GetEventInt(event, "team");
-	}
+	int winner;
+	if(strcmp(name, "round_win") == 0 || strcmp(name, "dod_round_win") == 0)
+		winner = GetEventInt(event, "team"); // Nuclear Dawn & DoD:S
 	else
-	{
 		winner = GetEventInt(event, "winner");
-	}
 
-	if (winner == 0 || winner == 1 || !GetConVarBool(g_Cvar_EndOfMapVote))
-	{
+	if(winner == 0 || winner == 1 || !GetConVarBool(g_Cvar_EndOfMapVote))
 		return;
-	}
 
-	if (winner >= MAXTEAMS)
-	{
+	if(winner >= MAXTEAMS)
 		SetFailState("Mod exceed maximum team count - Please file a bug report.");
-	}
 
 	g_TotalRounds++;
 
 	g_winCount[winner]++;
 
-	if (!GetArraySize(g_MapList) || g_HasVoteStarted || g_MapVoteCompleted)
+	if(!GetArraySize(g_MapList) || g_HasVoteStarted || g_MapVoteCompleted)
 	{
 		return;
 	}
@@ -840,16 +847,16 @@ public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)
 	CheckMaxRounds(g_TotalRounds);
 }
 
-public CheckWinLimit(winner_score)
+public void CheckWinLimit(int winner_score)
 {
-	if (g_Cvar_Winlimit != INVALID_HANDLE)
+	if(g_Cvar_Winlimit != INVALID_HANDLE)
 	{
-		new winlimit = GetConVarInt(g_Cvar_Winlimit);
-		if (winlimit)
+		int winlimit = GetConVarInt(g_Cvar_Winlimit);
+		if(winlimit)
 		{
-			if (winner_score >= (winlimit - GetConVarInt(g_Cvar_StartRounds)))
+			if(winner_score >= (winlimit - GetConVarInt(g_Cvar_StartRounds)))
 			{
-				if (!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
+				if(!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
 				{
 					SetupWarningTimer(WarningType_Vote, MapChange_MapEnd);
 					//InitiateVote(MapChange_MapEnd, INVALID_HANDLE);
@@ -858,18 +865,18 @@ public CheckWinLimit(winner_score)
 		}
 	}
 
-	if (g_Cvar_MatchClinch != INVALID_HANDLE && g_Cvar_Maxrounds != INVALID_HANDLE)
+	if(g_Cvar_MatchClinch != INVALID_HANDLE && g_Cvar_Maxrounds != INVALID_HANDLE)
 	{
-		new bool:clinch = GetConVarBool(g_Cvar_MatchClinch);
+		bool clinch = GetConVarBool(g_Cvar_MatchClinch);
 
-		if (clinch)
+		if(clinch)
 		{
-			new maxrounds = GetConVarInt(g_Cvar_Maxrounds);
-			new winlimit = RoundFloat(maxrounds / 2.0);
+			int maxrounds = GetConVarInt(g_Cvar_Maxrounds);
+			int winlimit = RoundFloat(maxrounds / 2.0);
 
 			if(winner_score == winlimit - 1)
 			{
-				if (!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
+				if(!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
 				{
 					SetupWarningTimer(WarningType_Vote, MapChange_MapEnd);
 					//InitiateVote(MapChange_MapEnd, INVALID_HANDLE);
@@ -879,32 +886,24 @@ public CheckWinLimit(winner_score)
 	}
 }
 
-public CheckMaxRounds(roundcount)
+public void CheckMaxRounds(int roundcount)
 {
-	new maxrounds = 0;
+	int maxrounds = 0;
 
-	if (g_RoundCounting == RoundCounting_ArmsRace)
-	{
+	if(g_RoundCounting == RoundCounting_ArmsRace)
 		maxrounds = GameRules_GetProp("m_iNumGunGameProgressiveWeaponsCT");
-	}
-	else if (g_RoundCounting == RoundCounting_MvM)
-	{
+	else if(g_RoundCounting == RoundCounting_MvM)
 		maxrounds = GetEntProp(g_ObjectiveEnt, Prop_Send, "m_nMannVsMachineMaxWaveCount");
-	}
-	else if (g_Cvar_Maxrounds != INVALID_HANDLE)
-	{
+	else if(g_Cvar_Maxrounds != INVALID_HANDLE)
 		maxrounds = GetConVarInt(g_Cvar_Maxrounds);
-	}
 	else
-	{
 		return;
-	}
 
-	if (maxrounds)
+	if(maxrounds)
 	{
-		if (roundcount >= (maxrounds - GetConVarInt(g_Cvar_StartRounds)))
+		if(roundcount >= (maxrounds - GetConVarInt(g_Cvar_StartRounds)))
 		{
-			if (!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
+			if(!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
 			{
 				SetupWarningTimer(WarningType_Vote, MapChange_MapEnd);
 				//InitiateVote(MapChange_MapEnd, INVALID_HANDLE);
@@ -913,33 +912,25 @@ public CheckMaxRounds(roundcount)
 	}
 }
 
-public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 {
-	if (!GetArraySize(g_MapList) || g_Cvar_Fraglimit == INVALID_HANDLE || g_HasVoteStarted)
-	{
+	if(!GetArraySize(g_MapList) || g_Cvar_Fraglimit == INVALID_HANDLE || g_HasVoteStarted)
 		return;
-	}
 
-	if (!GetConVarInt(g_Cvar_Fraglimit) || !GetConVarBool(g_Cvar_EndOfMapVote))
-	{
+	if(!GetConVarInt(g_Cvar_Fraglimit) || !GetConVarBool(g_Cvar_EndOfMapVote))
 		return;
-	}
 
-	if (g_MapVoteCompleted)
-	{
+	if(g_MapVoteCompleted)
 		return;
-	}
 
-	new fragger = GetClientOfUserId(GetEventInt(event, "attacker"));
+	int fragger = GetClientOfUserId(GetEventInt(event, "attacker"));
 
-	if (!fragger)
-	{
+	if(!fragger)
 		return;
-	}
 
-	if (GetClientFrags(fragger) >= (GetConVarInt(g_Cvar_Fraglimit) - GetConVarInt(g_Cvar_StartFrags)))
+	if(GetClientFrags(fragger) >= (GetConVarInt(g_Cvar_Fraglimit) - GetConVarInt(g_Cvar_StartFrags)))
 	{
-		if (!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
+		if(!g_WarningInProgress || g_WarningTimer == INVALID_HANDLE)
 		{
 			SetupWarningTimer(WarningType_Vote, MapChange_MapEnd);
 			//InitiateVote(MapChange_MapEnd, INVALID_HANDLE);
@@ -947,7 +938,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
 	}
 }
 
-public Action:Command_Mapvote(client, args)
+public Action Command_Mapvote(int client, int args)
 {
 	ShowActivity2(client, "[MCE] ", "%t", "Initiated Vote Map");
 
@@ -964,7 +955,7 @@ public Action:Command_Mapvote(client, args)
  * @param when			When the resulting map change should occur.
  * @param inputlist		Optional list of maps to use for the vote, otherwise an internal list of nominations + random maps will be used.
  */
-InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
+void InitiateVote(MapChange when, Handle inputlist=INVALID_HANDLE)
 {
 	g_WaitingForVote = true;
 	g_WarningInProgress = false;
@@ -972,37 +963,35 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 	// Check if a nativevotes vots is in progress first
 	// NativeVotes running at the same time as a regular vote can cause hintbox problems,
 	// so always check for a standard vote
-	if (IsVoteInProgress() || (g_NativeVotes && NativeVotes_IsVoteInProgress()))
+	if(IsVoteInProgress() || (g_NativeVotes && NativeVotes_IsVoteInProgress()))
 	{
 		// Can't start a vote, try again in 5 seconds.
 		//g_RetryTimer = CreateTimer(5.0, Timer_StartMapVote, _, TIMER_FLAG_NO_MAPCHANGE);
 
 		CPrintToChatAll("[MCE] %t", "Cannot Start Vote", FAILURE_TIMER_LENGTH);
-		new Handle:data;
+		Handle data;
 		g_RetryTimer = CreateDataTimer(1.0, Timer_StartMapVote, data, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
 		/* Mapchooser Extended */
 		WritePackCell(data, FAILURE_TIMER_LENGTH);
 
-		if (GetConVarBool(g_Cvar_RunOff) && g_RunoffCount > 0)
-		{
+		if(GetConVarBool(g_Cvar_RunOff) && g_RunoffCount > 0)
 			WritePackString(data, "Revote Warning");
-		} else {
+		else
 			WritePackString(data, "Vote Warning");
-		}
 		/* End Mapchooser Extended */
 
-		WritePackCell(data, _:when);
-		WritePackCell(data, _:inputlist);
+		WritePackCell(data, view_as<int>(when));
+		WritePackCell(data, view_as<int>(inputlist));
 		ResetPack(data);
 		return;
 	}
 
 	/* If the main map vote has completed (and chosen result) and its currently changing (not a delayed change) we block further attempts */
-	if (g_MapVoteCompleted && g_ChangeMapInProgress)
-	{
+	if(g_MapVoteCompleted && g_ChangeMapInProgress)
 		return;
-	}
+
+	CheckMapPlayerRestriction();
 
 	g_ChangeTime = when;
 
@@ -1010,16 +999,16 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 
 	g_HasVoteStarted = true;
 
-	if (g_NativeVotes)
+	if(g_NativeVotes)
 	{
 		g_VoteMenu = NativeVotes_Create(Handler_MapVoteMenu, NativeVotesType_NextLevelMult, MenuAction_End | MenuAction_VoteCancel | MenuAction_Display | MenuAction_DisplayItem);
 		NativeVotes_SetResultCallback(g_VoteMenu, Handler_NativeVoteFinished);
 	}
 	else
 	{
-		new Handle:menuStyle = GetMenuStyleHandle(MenuStyle:GetConVarInt(g_Cvar_MenuStyle));
+		Handle menuStyle = GetMenuStyleHandle(view_as<MenuStyle>(GetConVarInt(g_Cvar_MenuStyle)));
 
-		if (menuStyle != INVALID_HANDLE)
+		if(menuStyle != INVALID_HANDLE)
 		{
 			g_VoteMenu = CreateMenuEx(menuStyle, Handler_MapVoteMenu, MenuAction_End | MenuAction_Display | MenuAction_DisplayItem | MenuAction_VoteCancel);
 		}
@@ -1032,28 +1021,25 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 		g_AddNoVote = GetConVarBool(g_Cvar_NoVoteOption);
 
 		// Block Vote Slots
-		if (GetConVarBool(g_Cvar_BlockSlots))
+		if(GetConVarBool(g_Cvar_BlockSlots))
 		{
-			new Handle:radioStyle = GetMenuStyleHandle(MenuStyle_Radio);
+			Handle radioStyle = GetMenuStyleHandle(MenuStyle_Radio);
 
-			if (GetMenuStyle(g_VoteMenu) == radioStyle)
+			if(GetMenuStyle(g_VoteMenu) == radioStyle)
 			{
 				g_BlockedSlots = true;
 				AddMenuItem(g_VoteMenu, LINE_ONE, "Choose something...", ITEMDRAW_DISABLED);
 				AddMenuItem(g_VoteMenu, LINE_TWO, "...will ya?", ITEMDRAW_DISABLED);
-				if (!g_AddNoVote)
-				{
+
+				if(!g_AddNoVote)
 					AddMenuItem(g_VoteMenu, LINE_SPACER, "", ITEMDRAW_SPACER);
-				}
-			} else {
-				g_BlockedSlots = false;
 			}
+			else
+				g_BlockedSlots = false;
 		}
 
-		if (g_AddNoVote)
-		{
+		if(g_AddNoVote)
 			SetMenuOptionFlags(g_VoteMenu, MENUFLAG_BUTTON_NOVOTE);
-		}
 
 		SetMenuTitle(g_VoteMenu, "Vote Nextmap");
 		SetVoteResultCallback(g_VoteMenu, Handler_MapVoteFinished);
@@ -1070,53 +1056,44 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 	 * like sm_mapvote from the adminmenu in the future.
 	 */
 
-	decl String:map[PLATFORM_MAX_PATH];
+	static char map[PLATFORM_MAX_PATH];
 
 	/* No input given - User our internal nominations and maplist */
-	if (inputlist == INVALID_HANDLE)
+	if(inputlist == INVALID_HANDLE)
 	{
-		new Handle:randomizeList = INVALID_HANDLE;
-		if (GetConVarBool(g_Cvar_RandomizeNominations))
-		{
+		Handle randomizeList = INVALID_HANDLE;
+		if(GetConVarBool(g_Cvar_RandomizeNominations))
 			randomizeList = CloneArray(g_NominateList);
-		}
 
-		new nominateCount = GetArraySize(g_NominateList);
+		int nominateCount = GetArraySize(g_NominateList);
 
-		new voteSize = GetVoteSize();
+		int voteSize = GetVoteSize();
 
 		// The if and else if could be combined, but it looks extremely messy
 		// This is a hack to lower the vote menu size by 1 when Don't Change or Extend Map should appear
-		if (g_NativeVotes)
+		if(g_NativeVotes)
 		{
-			if ((when == MapChange_Instant || when == MapChange_RoundEnd) && GetConVarBool(g_Cvar_DontChange))
-			{
+			if((when == MapChange_Instant || when == MapChange_RoundEnd) && GetConVarBool(g_Cvar_DontChange))
 				voteSize--;
-			}
-			else if (GetConVarBool(g_Cvar_Extend) && g_Extends < GetConVarInt(g_Cvar_Extend))
-			{
+			else if(GetConVarBool(g_Cvar_Extend) && g_Extends < GetConVarInt(g_Cvar_Extend))
 				voteSize--;
-			}
 		}
 
 		/* Smaller of the two - It should be impossible for nominations to exceed the size though (cvar changed mid-map?) */
-		new nominationsToAdd = nominateCount >= voteSize ? voteSize : nominateCount;
+		int nominationsToAdd = nominateCount >= voteSize ? voteSize : nominateCount;
 
-		new bool:extendFirst = GetConVarBool(g_Cvar_ExtendPosition);
+		bool extendFirst = GetConVarBool(g_Cvar_ExtendPosition);
 
-		if (extendFirst)
-		{
+		if(extendFirst)
 			AddExtendToMenu(g_VoteMenu, when);
-		}
 
-		for (new i=0; i<nominationsToAdd; i++)
+		for(int i = 0; i < nominationsToAdd; i++)
 		{
 			GetArrayString(g_NominateList, i, map, PLATFORM_MAX_PATH);
 
-			if (randomizeList == INVALID_HANDLE)
-			{
+			if(randomizeList == INVALID_HANDLE)
 				AddMapItem(map);
-			}
+
 			RemoveStringFromArray(g_NextMapList, map);
 
 			/* Notify Nominations that this map is now free */
@@ -1127,7 +1104,7 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 		}
 
 		/* Clear out the rest of the nominations array */
-		for (new i=nominationsToAdd; i<nominateCount; i++)
+		for(int i = nominationsToAdd; i < nominateCount; i++)
 		{
 			GetArrayString(g_NominateList, i, map, PLATFORM_MAX_PATH);
 			/* These maps shouldn't be excluded from the vote as they weren't really nominated at all */
@@ -1141,13 +1118,13 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 
 		/* There should currently be 'nominationsToAdd' unique maps in the vote */
 
-		new i = nominationsToAdd;
-		new count = 0;
-		new availableMaps = GetArraySize(g_NextMapList);
+		int i = nominationsToAdd;
+		int count = 0;
+		int availableMaps = GetArraySize(g_NextMapList);
 
-		if (i < voteSize && availableMaps == 0)
+		if(i < voteSize && availableMaps == 0)
 		{
-			if (i == 0)
+			if(i == 0)
 			{
 				LogError("No maps available for vote.");
 				return;
@@ -1159,39 +1136,36 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 			}
 		}
 
-		while (i < voteSize)
+		while(i < voteSize)
 		{
 			GetArrayString(g_NextMapList, count, map, PLATFORM_MAX_PATH);
 			count++;
 
-			if (randomizeList == INVALID_HANDLE)
+			if(randomizeList == INVALID_HANDLE)
 			{
 				/* Insert the map and increment our count */
 				AddMapItem(map);
 			}
 			else
-			{
 				PushArrayString(randomizeList, map);
-			}
+
 			i++;
 
-			if (count >= availableMaps)
-			{
-				//Run out of maps, this will have to do.
+			//Run out of maps, this will have to do.
+			if(count >= availableMaps)
 				break;
-			}
 		}
 
-		if (randomizeList != INVALID_HANDLE)
+		if(randomizeList != INVALID_HANDLE)
 		{
 			// Fisher-Yates Shuffle
-			for (new j = GetArraySize(randomizeList) - 1; j >= 1; j--)
+			for(int j = GetArraySize(randomizeList) - 1; j >= 1; j--)
 			{
-				new k = GetRandomInt(0, j);
+				int k = GetRandomInt(0, j);
 				SwapArrayItems(randomizeList, j, k);
 			}
 
-			for (new j = 0; j < GetArraySize(randomizeList); j++)
+			for(int j = 0; j < GetArraySize(randomizeList); j++)
 			{
 				GetArrayString(randomizeList, j, map, PLATFORM_MAX_PATH);
 				AddMapItem(map);
@@ -1206,53 +1180,43 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 		ClearArray(g_NominateOwners);
 		ClearArray(g_NominateList);
 
-		if (!extendFirst)
-		{
+		if(!extendFirst)
 			AddExtendToMenu(g_VoteMenu, when);
-		}
 	}
 	else //We were given a list of maps to start the vote with
 	{
-		new size = GetArraySize(inputlist);
+		int size = GetArraySize(inputlist);
 
-		for (new i=0; i<size; i++)
+		for(int i = 0; i < size; i++)
 		{
 			GetArrayString(inputlist, i, map, PLATFORM_MAX_PATH);
 
-			if (IsMapValid(map))
+			if(IsMapValid(map))
 			{
 				AddMapItem(map);
 			}
 			// New in Mapchooser Extended
-			else if (StrEqual(map, VOTE_DONTCHANGE))
+			else if(StrEqual(map, VOTE_DONTCHANGE))
 			{
-				if (g_NativeVotes)
-				{
+				if(g_NativeVotes)
 					NativeVotes_AddItem(g_VoteMenu, VOTE_DONTCHANGE, "Don't Change");
-				}
 				else
-				{
 					AddMenuItem(g_VoteMenu, VOTE_DONTCHANGE, "Don't Change");
-				}
 			}
-			else if (StrEqual(map, VOTE_EXTEND))
+			else if(StrEqual(map, VOTE_EXTEND))
 			{
-				if (g_NativeVotes)
-				{
+				if(g_NativeVotes)
 					NativeVotes_AddItem(g_VoteMenu, VOTE_EXTEND, "Extend Map");
-				}
 				else
-				{
 					AddMenuItem(g_VoteMenu, VOTE_EXTEND, "Extend Map");
-				}
 			}
 		}
 		CloseHandle(inputlist);
 	}
 
-	new voteDuration = GetConVarInt(g_Cvar_VoteDuration);
+	int voteDuration = GetConVarInt(g_Cvar_VoteDuration);
 
-	if (g_NativeVotes)
+	if(g_NativeVotes)
 	{
 		NativeVotes_DisplayToAll(g_VoteMenu, voteDuration);
 	}
@@ -1260,7 +1224,7 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 	{
 		//SetMenuExitButton(g_VoteMenu, false);
 
-		if (GetVoteSize() <= GetMaxPageItems(GetMenuStyle(g_VoteMenu)))
+		if(GetVoteSize() <= GetMaxPageItems(GetMenuStyle(g_VoteMenu)))
 		{
 			//This is necessary to get items 9 and 0 as usable voting items
 			SetMenuPagination(g_VoteMenu, MENU_NO_PAGINATION);
@@ -1280,81 +1244,71 @@ InitiateVote(MapChange:when, Handle:inputlist=INVALID_HANDLE)
 	CPrintToChatAll("[MCE] %t", "Nextmap Voting Started");
 }
 
-public Handler_NativeVoteFinished(Handle:vote,
-							num_votes,
-							num_clients,
-							const client_indexes[],
-							const client_votes[],
-							num_items,
-							const item_indexes[],
-							const item_votes[])
+public int Handler_NativeVoteFinished(Handle vote,
+									   int num_votes,
+									   int num_clients,
+									   const int[] client_indexes,
+									   const int[] client_votes,
+									   int num_items,
+									   const int[] item_indexes,
+									   const int[] item_votes)
 {
-	new client_info[num_clients][2];
-	new item_info[num_items][2];
+	int[][] client_info = new int[num_clients][2];
+	int[][] item_info = new int[num_items][2];
 
 	NativeVotes_FixResults(num_clients, client_indexes, client_votes, num_items, item_indexes, item_votes, client_info, item_info);
 	Handler_MapVoteFinished(vote, num_votes, num_clients, client_info, num_items, item_info);
 }
 
 
-public Handler_VoteFinishedGeneric(Handle:menu,
-						   num_votes,
-						   num_clients,
-						   const client_info[][2],
-						   num_items,
-						   const item_info[][2])
+public void Handler_VoteFinishedGeneric(Handle menu,
+										int num_votes,
+										int num_clients,
+										const int[][] client_info,
+										int num_items,
+										const int[][] item_info)
 {
-	decl String:map[PLATFORM_MAX_PATH];
+	static char map[PLATFORM_MAX_PATH];
 	GetMapItem(menu, item_info[0][VOTEINFO_ITEM_INDEX], map, PLATFORM_MAX_PATH);
 
 	Call_StartForward(g_MapVoteEndForward);
 	Call_PushString(map);
 	Call_Finish();
 
-	if (strcmp(map, VOTE_EXTEND, false) == 0)
+	if(strcmp(map, VOTE_EXTEND, false) == 0)
 	{
 		g_Extends++;
 
-		new time;
-		if (GetMapTimeLimit(time))
+		int time;
+		if(GetMapTimeLimit(time))
 		{
-			if (time > 0)
-			{
+			if(time > 0)
 				ExtendMapTimeLimit(GetConVarInt(g_Cvar_ExtendTimeStep)*60);
-			}
 		}
 
-		if (g_Cvar_Winlimit != INVALID_HANDLE)
+		if(g_Cvar_Winlimit != INVALID_HANDLE)
 		{
-			new winlimit = GetConVarInt(g_Cvar_Winlimit);
-			if (winlimit)
-			{
+			int winlimit = GetConVarInt(g_Cvar_Winlimit);
+			if(winlimit)
 				SetConVarInt(g_Cvar_Winlimit, winlimit + GetConVarInt(g_Cvar_ExtendRoundStep));
-			}
 		}
 
-		if (g_Cvar_Maxrounds != INVALID_HANDLE)
+		if(g_Cvar_Maxrounds != INVALID_HANDLE)
 		{
-			new maxrounds = GetConVarInt(g_Cvar_Maxrounds);
-			if (maxrounds)
-			{
+			int maxrounds = GetConVarInt(g_Cvar_Maxrounds);
+			if(maxrounds)
 				SetConVarInt(g_Cvar_Maxrounds, maxrounds + GetConVarInt(g_Cvar_ExtendRoundStep));
-			}
 		}
 
-		if (g_Cvar_Fraglimit != INVALID_HANDLE)
+		if(g_Cvar_Fraglimit != INVALID_HANDLE)
 		{
-			new fraglimit = GetConVarInt(g_Cvar_Fraglimit);
-			if (fraglimit)
-			{
+			int fraglimit = GetConVarInt(g_Cvar_Fraglimit);
+			if(fraglimit)
 				SetConVarInt(g_Cvar_Fraglimit, fraglimit + GetConVarInt(g_Cvar_ExtendFragStep));
-			}
 		}
 
-		if (g_NativeVotes)
-		{
+		if(g_NativeVotes)
 			NativeVotes_DisplayPassEx(menu, NativeVotesPass_Extend);
-		}
 
 		CPrintToChatAll("[MCE] %t", "Current Map Extended", RoundToFloor(float(item_info[0][VOTEINFO_ITEM_VOTES])/float(num_votes)*100), num_votes);
 		LogAction(-1, -1, "Voting for next map has finished. The current map has been extended.");
@@ -1366,12 +1320,10 @@ public Handler_VoteFinishedGeneric(Handle:menu,
 		SetupTimeleftTimer();
 
 	}
-	else if (strcmp(map, VOTE_DONTCHANGE, false) == 0)
+	else if(strcmp(map, VOTE_DONTCHANGE, false) == 0)
 	{
-		if (g_NativeVotes)
-		{
+		if(g_NativeVotes)
 			NativeVotes_DisplayPassEx(menu, NativeVotesPass_Extend);
-		}
 
 		CPrintToChatAll("[MCE] %t", "Current Map Stays", RoundToFloor(float(item_info[0][VOTEINFO_ITEM_VOTES])/float(num_votes)*100), num_votes);
 		LogAction(-1, -1, "Voting for next map has finished. 'No Change' was the winner");
@@ -1383,34 +1335,30 @@ public Handler_VoteFinishedGeneric(Handle:menu,
 	}
 	else
 	{
-		if (g_ChangeTime == MapChange_MapEnd)
+		if(g_ChangeTime == MapChange_MapEnd)
 		{
 			SetNextMap(map);
-			if (g_NativeVotes)
-			{
+
+			if(g_NativeVotes)
 				NativeVotes_DisplayPass(menu, map);
-			}
 		}
-		else if (g_ChangeTime == MapChange_Instant)
+		else if(g_ChangeTime == MapChange_Instant)
 		{
-			new Handle:data;
+			Handle data;
 			CreateDataTimer(4.0, Timer_ChangeMap, data);
 			WritePackString(data, map);
 			g_ChangeMapInProgress = false;
-			if (g_NativeVotes)
-			{
+
+			if(g_NativeVotes)
 				NativeVotes_DisplayPassEx(menu, NativeVotesPass_ChgLevel, map);
-			}
 		}
 		else // MapChange_RoundEnd
 		{
 			SetNextMap(map);
 			g_ChangeMapAtRoundEnd = true;
 
-			if (g_NativeVotes)
-			{
+			if(g_NativeVotes)
 				NativeVotes_DisplayPass(menu, map);
-			}
 		}
 
 		g_HasVoteStarted = false;
@@ -1421,88 +1369,80 @@ public Handler_VoteFinishedGeneric(Handle:menu,
 	}
 }
 
-public Handler_MapVoteFinished(Handle:menu,
-						   num_votes,
-						   num_clients,
-						   const client_info[][2],
-						   num_items,
-						   const item_info[][2])
+public void Handler_MapVoteFinished(Handle menu,
+									int num_votes,
+									int num_clients,
+									const int[][] client_info,
+									int num_items,
+									const int[][] item_info)
 {
 	// Implement revote logic - Only run this` block if revotes are enabled and this isn't the last revote
-	if (GetConVarBool(g_Cvar_RunOff) && num_items > 1 && g_RunoffCount < GetConVarInt(g_Cvar_MaxRunOffs))
+	if(GetConVarBool(g_Cvar_RunOff) && num_items > 1 && g_RunoffCount < GetConVarInt(g_Cvar_MaxRunOffs))
 	{
 		g_RunoffCount++;
-		new highest_votes = item_info[0][VOTEINFO_ITEM_VOTES];
-		new required_percent = GetConVarInt(g_Cvar_RunOffPercent);
-		new required_votes = RoundToCeil(float(num_votes) * float(required_percent) / 100);
+		int highest_votes = item_info[0][VOTEINFO_ITEM_VOTES];
+		int required_percent = GetConVarInt(g_Cvar_RunOffPercent);
+		int required_votes = RoundToCeil(float(num_votes) * float(required_percent) / 100);
 
-		if (highest_votes == item_info[1][VOTEINFO_ITEM_VOTES])
+		if(highest_votes == item_info[1][VOTEINFO_ITEM_VOTES])
 		{
 			g_HasVoteStarted = false;
 
 			//Revote is needed
-			new arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
-			new Handle:mapList = CreateArray(arraySize);
+			int arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
+			Handle mapList = CreateArray(arraySize);
 
-			for (new i = 0; i < num_items; i++)
+			for(int i = 0; i < num_items; i++)
 			{
-				if (item_info[i][VOTEINFO_ITEM_VOTES] == highest_votes)
+				if(item_info[i][VOTEINFO_ITEM_VOTES] == highest_votes)
 				{
-					decl String:map[PLATFORM_MAX_PATH];
+					static char map[PLATFORM_MAX_PATH];
 
 					GetMapItem(menu, item_info[i][VOTEINFO_ITEM_INDEX], map, PLATFORM_MAX_PATH);
 					PushArrayString(mapList, map);
 				}
 				else
-				{
 					break;
-				}
 			}
 
-			if (g_NativeVotes)
-			{
+			if(g_NativeVotes)
 				NativeVotes_DisplayFail(menu, NativeVotesFail_NotEnoughVotes);
-			}
 
 			CPrintToChatAll("[MCE] %t", "Tie Vote", GetArraySize(mapList));
-			SetupWarningTimer(WarningType_Revote, MapChange:g_ChangeTime, mapList);
+			SetupWarningTimer(WarningType_Revote, view_as<MapChange>(g_ChangeTime), mapList);
 			return;
 		}
-		else if (highest_votes < required_votes)
+		else if(highest_votes < required_votes)
 		{
 			g_HasVoteStarted = false;
 
 			//Revote is needed
-			new arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
-			new Handle:mapList = CreateArray(arraySize);
+			int arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
+			Handle mapList = CreateArray(arraySize);
 
-			decl String:map1[PLATFORM_MAX_PATH];
+			static char map1[PLATFORM_MAX_PATH];
 			GetMapItem(menu, item_info[0][VOTEINFO_ITEM_INDEX], map1, PLATFORM_MAX_PATH);
 
 			PushArrayString(mapList, map1);
 
 			// We allow more than two maps for a revote if they are tied
-			for (new i = 1; i < num_items; i++)
+			for(int i = 1; i < num_items; i++)
 			{
-				if (GetArraySize(mapList) < 2 || item_info[i][VOTEINFO_ITEM_VOTES] == item_info[i - 1][VOTEINFO_ITEM_VOTES])
+				if(GetArraySize(mapList) < 2 || item_info[i][VOTEINFO_ITEM_VOTES] == item_info[i - 1][VOTEINFO_ITEM_VOTES])
 				{
-					decl String:map[PLATFORM_MAX_PATH];
+					static char map[PLATFORM_MAX_PATH];
 					GetMapItem(menu, item_info[i][VOTEINFO_ITEM_INDEX], map, PLATFORM_MAX_PATH);
 					PushArrayString(mapList, map);
 				}
 				else
-				{
 					break;
-				}
 			}
 
-			if (g_NativeVotes)
-			{
+			if(g_NativeVotes)
 				NativeVotes_DisplayFail(menu, NativeVotesFail_NotEnoughVotes);
-			}
 
 			CPrintToChatAll("[MCE] %t", "Revote Is Needed", required_percent);
-			SetupWarningTimer(WarningType_Revote, MapChange:g_ChangeTime, mapList);
+			SetupWarningTimer(WarningType_Revote, view_as<MapChange>(g_ChangeTime), mapList);
 			return;
 		}
 	}
@@ -1512,91 +1452,81 @@ public Handler_MapVoteFinished(Handle:menu,
 }
 
 // This is shared by NativeVotes now, but NV doesn't support Display or DisplayItem
-public Handler_MapVoteMenu(Handle:menu, MenuAction:action, param1, param2)
+public int Handler_MapVoteMenu(Handle menu, MenuAction action, int param1, int param2)
 {
-	switch (action)
+	switch(action)
 	{
 		case MenuAction_End:
 		{
 			g_VoteMenu = INVALID_HANDLE;
-			if (g_NativeVotes)
-			{
+			if(g_NativeVotes)
 				NativeVotes_Close(menu);
-			}
 			else
-			{
 				CloseHandle(menu);
-			}
 		}
 
 		case MenuAction_Display:
 		{
 			// NativeVotes uses the standard TF2/CSGO vote screen
-			if (!g_NativeVotes)
+			if(!g_NativeVotes)
 			{
-				decl String:buffer[255];
+				static char buffer[255];
 				Format(buffer, sizeof(buffer), "%T", "Vote Nextmap", param1);
-				new Handle:panel = Handle:param2;
+				Handle panel = view_as<Handle>(param2);
 				SetPanelTitle(panel, buffer);
 			}
 		}
 
 		case MenuAction_DisplayItem:
 		{
-			new String:map[PLATFORM_MAX_PATH];
-			new String:buffer[255];
-			new mark = GetConVarInt(g_Cvar_MarkCustomMaps);
+			char map[PLATFORM_MAX_PATH];
+			char buffer[255];
+			int mark = GetConVarInt(g_Cvar_MarkCustomMaps);
 
-			if (g_NativeVotes)
-			{
+			if(g_NativeVotes)
 				NativeVotes_GetItem(menu, param2, map, PLATFORM_MAX_PATH);
-			}
 			else
-			{
 				GetMenuItem(menu, param2, map, PLATFORM_MAX_PATH);
-			}
 
-			if (StrEqual(map, VOTE_EXTEND, false))
+			if(StrEqual(map, VOTE_EXTEND, false))
 			{
 				Format(buffer, sizeof(buffer), "%T", "Extend Map", param1);
 			}
-			else if (StrEqual(map, VOTE_DONTCHANGE, false))
+			else if(StrEqual(map, VOTE_DONTCHANGE, false))
 			{
 				Format(buffer, sizeof(buffer), "%T", "Dont Change", param1);
 			}
 			// Mapchooser Extended
-			else if (StrEqual(map, LINE_ONE, false))
+			else if(StrEqual(map, LINE_ONE, false))
 			{
 				Format(buffer, sizeof(buffer),"%T", "Line One", param1);
 			}
-			else if (StrEqual(map, LINE_TWO, false))
+			else if(StrEqual(map, LINE_TWO, false))
 			{
 				Format(buffer, sizeof(buffer),"%T", "Line Two", param1);
 			}
 			// Note that the first part is to discard the spacer line
-			else if (!StrEqual(map, LINE_SPACER, false))
+			else if(!StrEqual(map, LINE_SPACER, false))
 			{
-				if (mark == 1 && !InternalIsMapOfficial(map))
+				if(mark == 1 && !InternalIsMapOfficial(map))
 				{
 					Format(buffer, sizeof(buffer), "%T", "Custom Marked", param1, map);
 				}
-				else if (mark == 2 && !InternalIsMapOfficial(map))
+				else if(mark == 2 && !InternalIsMapOfficial(map))
 				{
 					Format(buffer, sizeof(buffer), "%T", "Custom", param1, map);
 				}
 			}
 
-			if (buffer[0] != '\0')
+			if(buffer[0] != '\0')
 			{
-				if (g_NativeVotes)
+				if(g_NativeVotes)
 				{
 					NativeVotes_RedrawVoteItem(buffer);
-					return _:Plugin_Continue;
+					return view_as<int>(Plugin_Continue);
 				}
 				else
-				{
 					return RedrawMenuItem(buffer);
-				}
 			}
 			// End Mapchooser Extended
 		}
@@ -1604,27 +1534,23 @@ public Handler_MapVoteMenu(Handle:menu, MenuAction:action, param1, param2)
 		case MenuAction_VoteCancel:
 		{
 			// If we receive 0 votes, pick at random.
-			if (param1 == VoteCancel_NoVotes && GetConVarBool(g_Cvar_NoVoteMode))
+			if(param1 == VoteCancel_NoVotes && GetConVarBool(g_Cvar_NoVoteMode))
 			{
-				new count;
-				if (g_NativeVotes)
-				{
+				int count;
+				if(g_NativeVotes)
 					count = NativeVotes_GetItemCount(menu);
-				}
 				else
-				{
 					count = GetMenuItemCount(menu);
-				}
 
-				decl item;
-				decl String:map[PLATFORM_MAX_PATH];
+				int item;
+				static char map[PLATFORM_MAX_PATH];
 
 				do
 				{
-					new startInt = 0;
-					if (!g_NativeVotes && g_BlockedSlots)
+					int startInt = 0;
+					if(!g_NativeVotes && g_BlockedSlots)
 					{
-						if (g_AddNoVote)
+						if(g_AddNoVote)
 						{
 							startInt = 2;
 						}
@@ -1634,38 +1560,27 @@ public Handler_MapVoteMenu(Handle:menu, MenuAction:action, param1, param2)
 						}
 					}
 					item = GetRandomInt(startInt, count - 1);
-					if (g_NativeVotes)
-					{
+
+					if(g_NativeVotes)
 						NativeVotes_GetItem(menu, item, map, PLATFORM_MAX_PATH);
-					}
 					else
-					{
 						GetMenuItem(menu, item, map, PLATFORM_MAX_PATH);
-					}
 				}
-				while (strcmp(map, VOTE_EXTEND, false) == 0);
+				while(strcmp(map, VOTE_EXTEND, false) == 0);
 
 				SetNextMap(map);
 				g_MapVoteCompleted = true;
 
-				if (g_NativeVotes)
-				{
+				if(g_NativeVotes)
 					NativeVotes_DisplayPass(menu, map);
-				}
 			}
-			else if (g_NativeVotes)
+			else if(g_NativeVotes)
 			{
-				new NativeVotesFailType:reason = NativeVotesFail_Generic;
-				if (param1 == VoteCancel_NoVotes)
-				{
+				NativeVotesFailType reason = NativeVotesFail_Generic;
+				if(param1 == VoteCancel_NoVotes)
 					reason = NativeVotesFail_NotEnoughVotes;
-				}
 
 				NativeVotes_DisplayFail(menu, reason);
-			}
-			else
-			{
-				// We were actually cancelled. I guess we do nothing.
 			}
 
 			g_HasVoteStarted = false;
@@ -1675,15 +1590,15 @@ public Handler_MapVoteMenu(Handle:menu, MenuAction:action, param1, param2)
 	return 0;
 }
 
-public Action:Timer_ChangeMap(Handle:hTimer, Handle:dp)
+public Action Timer_ChangeMap(Handle hTimer, Handle dp)
 {
 	g_ChangeMapInProgress = false;
 
-	new String:map[PLATFORM_MAX_PATH];
+	char map[PLATFORM_MAX_PATH];
 
-	if (dp == INVALID_HANDLE)
+	if(dp == INVALID_HANDLE)
 	{
-		if (!GetNextMap(map, PLATFORM_MAX_PATH))
+		if(!GetNextMap(map, PLATFORM_MAX_PATH))
 		{
 			//No passed map and no set nextmap. fail!
 			return Plugin_Stop;
@@ -1700,10 +1615,10 @@ public Action:Timer_ChangeMap(Handle:hTimer, Handle:dp)
 	return Plugin_Stop;
 }
 
-bool:RemoveStringFromArray(Handle:array, String:str[])
+bool RemoveStringFromArray(Handle array, char[] str)
 {
-	new index = FindStringInArray(array, str);
-	if (index != -1)
+	int index = FindStringInArray(array, str);
+	if(index != -1)
 	{
 		RemoveFromArray(array, index);
 		return true;
@@ -1712,32 +1627,34 @@ bool:RemoveStringFromArray(Handle:array, String:str[])
 	return false;
 }
 
-CreateNextVote()
+void CreateNextVote()
 {
 	assert(g_NextMapList)
 	ClearArray(g_NextMapList);
 
-	decl String:map[PLATFORM_MAX_PATH];
-	new Handle:tempMaps  = CloneArray(g_MapList);
+	static char map[PLATFORM_MAX_PATH];
+	Handle tempMaps  = CloneArray(g_MapList);
 
 	GetCurrentMap(map, PLATFORM_MAX_PATH);
 	RemoveStringFromArray(tempMaps, map);
 
-	if (GetConVarInt(g_Cvar_ExcludeMaps) && GetArraySize(tempMaps) > GetConVarInt(g_Cvar_ExcludeMaps))
+	if(GetConVarInt(g_Cvar_ExcludeMaps) && GetArraySize(tempMaps) > GetConVarInt(g_Cvar_ExcludeMaps))
 	{
-		for (new i = 0; i < GetArraySize(g_OldMapList); i++)
+		StringMapSnapshot OldMapListSnapshot = g_OldMapList.Snapshot();
+		for(int i = 0; i < OldMapListSnapshot.Length; i++)
 		{
-			GetArrayString(g_OldMapList, i, map, PLATFORM_MAX_PATH);
+			OldMapListSnapshot.GetKey(i, map, sizeof(map));
 			RemoveStringFromArray(tempMaps, map);
 		}
+		delete OldMapListSnapshot;
 	}
 
-	new voteSize = GetVoteSize();
-	new limit = (voteSize < GetArraySize(tempMaps) ? voteSize : GetArraySize(tempMaps));
+	int voteSize = GetVoteSize();
+	int limit = (voteSize < GetArraySize(tempMaps) ? voteSize : GetArraySize(tempMaps));
 
-	for (new i = 0; i < limit; i++)
+	for(int i = 0; i < limit; i++)
 	{
-		new b = GetRandomInt(0, GetArraySize(tempMaps) - 1);
+		int b = GetRandomInt(0, GetArraySize(tempMaps) - 1);
 		GetArrayString(tempMaps, b, map, PLATFORM_MAX_PATH);
 		PushArrayString(g_NextMapList, map);
 		RemoveFromArray(tempMaps, b);
@@ -1746,35 +1663,33 @@ CreateNextVote()
 	CloseHandle(tempMaps);
 }
 
-bool:CanVoteStart()
+bool CanVoteStart()
 {
-	if (g_WaitingForVote || g_HasVoteStarted)
-	{
+	if(g_WaitingForVote || g_HasVoteStarted)
 		return false;
-	}
 
 	return true;
 }
 
-NominateResult:InternalNominateMap(String:map[], bool:force, owner)
+NominateResult InternalNominateMap(char[] map, bool force, int owner)
 {
-	if (!IsMapValid(map))
+	if(!IsMapValid(map))
 	{
 		return Nominate_InvalidMap;
 	}
 
 	/* Map already in the vote */
-	if (FindStringInArray(g_NominateList, map) != -1)
+	if(FindStringInArray(g_NominateList, map) != -1)
 	{
 		return Nominate_AlreadyInVote;
 	}
 
-	new index;
+	int index;
 
 	/* Look to replace an existing nomination by this client - Nominations made with owner = 0 aren't replaced */
-	if (owner && ((index = FindValueInArray(g_NominateOwners, owner)) != -1))
+	if(owner && ((index = FindValueInArray(g_NominateOwners, owner)) != -1))
 	{
-		new String:oldmap[PLATFORM_MAX_PATH];
+		char oldmap[PLATFORM_MAX_PATH];
 		GetArrayString(g_NominateList, index, oldmap, PLATFORM_MAX_PATH);
 		Call_StartForward(g_NominationsResetForward);
 		Call_PushString(oldmap);
@@ -1786,7 +1701,7 @@ NominateResult:InternalNominateMap(String:map[], bool:force, owner)
 	}
 
 	/* Too many nominated maps. */
-	if (g_NominateCount >= GetVoteSize() && !force)
+	if(g_NominateCount >= GetVoteSize() && !force)
 	{
 		return Nominate_VoteFull;
 	}
@@ -1795,9 +1710,9 @@ NominateResult:InternalNominateMap(String:map[], bool:force, owner)
 	PushArrayCell(g_NominateOwners, owner);
 	g_NominateCount++;
 
-	while (GetArraySize(g_NominateList) > GetVoteSize())
+	while(GetArraySize(g_NominateList) > GetVoteSize())
 	{
-		new String:oldmap[PLATFORM_MAX_PATH];
+		char oldmap[PLATFORM_MAX_PATH];
 		GetArrayString(g_NominateList, 0, oldmap, PLATFORM_MAX_PATH);
 		Call_StartForward(g_NominationsResetForward);
 		Call_PushString(oldmap);
@@ -1806,6 +1721,7 @@ NominateResult:InternalNominateMap(String:map[], bool:force, owner)
 
 		RemoveFromArray(g_NominateList, 0);
 		RemoveFromArray(g_NominateOwners, 0);
+		g_NominateCount--;
 	}
 
 	return Nominate_Added;
@@ -1813,28 +1729,26 @@ NominateResult:InternalNominateMap(String:map[], bool:force, owner)
 
 /* Add natives to allow nominate and initiate vote to be call */
 
-/* native  bool:NominateMap(const String:map[], bool:force, &NominateError:error); */
-public Native_NominateMap(Handle:plugin, numParams)
+/* native  bool NominateMap(const char[] map, bool force, &NominateError:error); */
+public int Native_NominateMap(Handle plugin, int numParams)
 {
-	new len;
+	int len;
 	GetNativeStringLength(1, len);
 
-	if (len <= 0)
-	{
-	  return false;
-	}
+	if(len <= 0)
+		return false;
 
-	new String:map[len+1];
+	char[] map = new char[len+1];
 	GetNativeString(1, map, len+1);
 
-	return _:InternalNominateMap(map, GetNativeCell(2), GetNativeCell(3));
+	return view_as<int>(InternalNominateMap(map, GetNativeCell(2), GetNativeCell(3)));
 }
 
-bool:InternalRemoveNominationByMap(String:map[])
+bool InternalRemoveNominationByMap(char[] map)
 {
-	for (new i = 0; i < GetArraySize(g_NominateList); i++)
+	for(int i = 0; i < GetArraySize(g_NominateList); i++)
 	{
-		new String:oldmap[PLATFORM_MAX_PATH];
+		char oldmap[PLATFORM_MAX_PATH];
 		GetArrayString(g_NominateList, i, oldmap, PLATFORM_MAX_PATH);
 
 		if(strcmp(map, oldmap, false) == 0)
@@ -1855,30 +1769,28 @@ bool:InternalRemoveNominationByMap(String:map[])
 	return false;
 }
 
-/* native  bool:RemoveNominationByMap(const String:map[]); */
-public Native_RemoveNominationByMap(Handle:plugin, numParams)
+/* native  bool RemoveNominationByMap(const char[] map); */
+public int Native_RemoveNominationByMap(Handle plugin, int numParams)
 {
-	new len;
+	int len;
 	GetNativeStringLength(1, len);
 
-	if (len <= 0)
-	{
-	  return false;
-	}
+	if(len <= 0)
+		return false;
 
-	new String:map[len+1];
+	char[] map = new char[len+1];
 	GetNativeString(1, map, len+1);
 
-	return _:InternalRemoveNominationByMap(map);
+	return view_as<int>(InternalRemoveNominationByMap(map));
 }
 
-bool:InternalRemoveNominationByOwner(owner)
+bool InternalRemoveNominationByOwner(int owner)
 {
-	new index;
+	int index;
 
-	if (owner && ((index = FindValueInArray(g_NominateOwners, owner)) != -1))
+	if(owner && ((index = FindValueInArray(g_NominateOwners, owner)) != -1))
 	{
-		new String:oldmap[PLATFORM_MAX_PATH];
+		char oldmap[PLATFORM_MAX_PATH];
 		GetArrayString(g_NominateList, index, oldmap, PLATFORM_MAX_PATH);
 
 		Call_StartForward(g_NominationsResetForward);
@@ -1896,17 +1808,17 @@ bool:InternalRemoveNominationByOwner(owner)
 	return false;
 }
 
-/* native  bool:RemoveNominationByOwner(owner); */
-public Native_RemoveNominationByOwner(Handle:plugin, numParams)
+/* native  bool RemoveNominationByOwner(owner); */
+public int Native_RemoveNominationByOwner(Handle plugin, int numParams)
 {
-	return _:InternalRemoveNominationByOwner(GetNativeCell(1));
+	return view_as<int>(InternalRemoveNominationByOwner(GetNativeCell(1)));
 }
 
 /* native InitiateMapChooserVote(); */
-public Native_InitiateVote(Handle:plugin, numParams)
+public int Native_InitiateVote(Handle plugin, int numParams)
 {
-	new MapChange:when = MapChange:GetNativeCell(1);
-	new Handle:inputarray = Handle:GetNativeCell(2);
+	MapChange when = view_as<MapChange>(GetNativeCell(1));
+	Handle inputarray = view_as<Handle>(GetNativeCell(2));
 
 	LogAction(-1, -1, "Starting map vote because outside request");
 
@@ -1914,52 +1826,48 @@ public Native_InitiateVote(Handle:plugin, numParams)
 	//InitiateVote(when, inputarray);
 }
 
-public Native_CanVoteStart(Handle:plugin, numParams)
+public int Native_CanVoteStart(Handle plugin, int numParams)
 {
 	return CanVoteStart();
 }
 
-public Native_CheckVoteDone(Handle:plugin, numParams)
+public int Native_CheckVoteDone(Handle plugin, int numParams)
 {
 	return g_MapVoteCompleted;
 }
 
-public Native_EndOfMapVoteEnabled(Handle:plugin, numParams)
+public int Native_EndOfMapVoteEnabled(Handle plugin, int numParams)
 {
 	return GetConVarBool(g_Cvar_EndOfMapVote);
 }
 
-public Native_GetExcludeMapList(Handle:plugin, numParams)
+public int Native_GetExcludeMapList(Handle plugin, int numParams)
 {
-	new Handle:array = Handle:GetNativeCell(1);
-
-	if (array == INVALID_HANDLE)
-	{
+	Handle array = view_as<Handle>(GetNativeCell(1));
+	if(array == INVALID_HANDLE)
 		return;
-	}
-	new size = GetArraySize(g_OldMapList);
-	decl String:map[PLATFORM_MAX_PATH];
 
-	for (new i=0; i<size; i++)
+	static char map[PLATFORM_MAX_PATH];
+	StringMapSnapshot OldMapListSnapshot = g_OldMapList.Snapshot();
+	for(int i = 0; i < OldMapListSnapshot.Length; i++)
 	{
-		GetArrayString(g_OldMapList, i, map, PLATFORM_MAX_PATH);
+		OldMapListSnapshot.GetKey(i, map, sizeof(map));
 		PushArrayString(array, map);
 	}
-
-	return;
+	delete OldMapListSnapshot;
 }
 
-public Native_GetNominatedMapList(Handle:plugin, numParams)
+public int Native_GetNominatedMapList(Handle plugin, int numParams)
 {
-	new Handle:maparray = Handle:GetNativeCell(1);
-	new Handle:ownerarray = Handle:GetNativeCell(2);
+	Handle maparray = view_as<Handle>(GetNativeCell(1));
+	Handle ownerarray = view_as<Handle>(GetNativeCell(2));
 
-	if (maparray == INVALID_HANDLE)
+	if(maparray == INVALID_HANDLE)
 		return;
 
-	decl String:map[PLATFORM_MAX_PATH];
+	static char map[PLATFORM_MAX_PATH];
 
-	for (new i = 0; i < GetArraySize(g_NominateList); i++)
+	for(int i = 0; i < GetArraySize(g_NominateList); i++)
 	{
 		GetArrayString(g_NominateList, i, map, PLATFORM_MAX_PATH);
 		PushArrayString(maparray, map);
@@ -1967,63 +1875,20 @@ public Native_GetNominatedMapList(Handle:plugin, numParams)
 		// If the optional parameter for an owner list was passed, then we need to fill that out as well
 		if(ownerarray != INVALID_HANDLE)
 		{
-			new index = GetArrayCell(g_NominateOwners, i);
+			int index = GetArrayCell(g_NominateOwners, i);
 			PushArrayCell(ownerarray, index);
 		}
 	}
-
-	return;
 }
 
 // Functions new to Mapchooser Extended
-
-/*
-SetupWarningTimer(MapChange:when=MapChange_MapEnd, Handle:mapList=INVALID_HANDLE)
+stock void SetupWarningTimer(WarningType type, MapChange when=MapChange_MapEnd, Handle mapList=INVALID_HANDLE, bool force=false)
 {
-	if (!IsMapEndVoteAllowed())
-	{
+	if(!GetArraySize(g_MapList) || g_ChangeMapInProgress || g_HasVoteStarted || (!force && ((when == MapChange_MapEnd && !GetConVarBool(g_Cvar_EndOfMapVote)) || g_MapVoteCompleted)))
 		return;
-	}
 
-	Call_StartForward(g_MapVoteWarningStartForward);
-	Call_Finish();
-
-	new Handle:data;
-	g_WarningTimer = CreateDataTimer(1.0, Timer_StartMapVote, data, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
-	WritePackCell(data, GetConVarInt(g_Cvar_WarningTime));
-	WritePackString(data, "Vote Warning");
-	WritePackCell(data, _:when);
-	WritePackCell(data, _:mapList);
-}
-
-SetupRunoffTimer(MapChange:when, Handle:mapList)
-{
-	if (!IsMapEndVoteAllowed())
-	{
-		return;
-	}
-
-	Call_StartForward(g_MapVoteRunoffStartForward);
-	Call_Finish();
-
-	new Handle:data;
-	g_WarningTimer = CreateDataTimer(1.0, Timer_StartMapVote, data, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
-	WritePackCell(data, GetConVarInt(g_Cvar_RunOffWarningTime));
-	WritePackString(data, "Revote Warning");
-	WritePackCell(data, _:when);
-	WritePackCell(data, _:mapList);
-}
-*/
-
-stock SetupWarningTimer(WarningType:type, MapChange:when=MapChange_MapEnd, Handle:mapList=INVALID_HANDLE, bool:force=false)
-{
-	if (!GetArraySize(g_MapList) || g_ChangeMapInProgress || g_HasVoteStarted || (!force && ((when == MapChange_MapEnd && !GetConVarBool(g_Cvar_EndOfMapVote)) || g_MapVoteCompleted)))
-	{
-		return;
-	}
-
-	new bool:interrupted = false;
-	if (g_WarningInProgress && g_WarningTimer != INVALID_HANDLE)
+	bool interrupted = false;
+	if(g_WarningInProgress && g_WarningTimer != INVALID_HANDLE)
 	{
 		interrupted = true;
 		KillTimer(g_WarningTimer);
@@ -2031,11 +1896,11 @@ stock SetupWarningTimer(WarningType:type, MapChange:when=MapChange_MapEnd, Handl
 
 	g_WarningInProgress = true;
 
-	decl Handle:forwardVote;
-	decl Handle:cvarTime;
-	decl String:translationKey[64];
+	Handle forwardVote;
+	Handle cvarTime;
+	static char translationKey[64];
 
-	switch (type)
+	switch(type)
 	{
 		case WarningType_Vote:
 		{
@@ -2054,25 +1919,25 @@ stock SetupWarningTimer(WarningType:type, MapChange:when=MapChange_MapEnd, Handl
 		}
 	}
 
-	if (!interrupted)
+	if(!interrupted)
 	{
 		Call_StartForward(forwardVote);
 		Call_Finish();
 	}
 
-	new Handle:data;
+	Handle data;
 	g_WarningTimer = CreateDataTimer(1.0, Timer_StartMapVote, data, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 	WritePackCell(data, GetConVarInt(cvarTime));
 	WritePackString(data, translationKey);
-	WritePackCell(data, _:when);
-	WritePackCell(data, _:mapList);
+	WritePackCell(data, view_as<int>(when));
+	WritePackCell(data, view_as<int>(mapList));
 	ResetPack(data);
 }
 
-stock InitializeOfficialMapList()
+stock void InitializeOfficialMapList()
 {
 	// If this fails, we want it to have an empty adt_array
-	if (ReadMapList(g_OfficialList,
+	if(ReadMapList(g_OfficialList,
 		g_mapOfficialFileSerial,
 		"official",
 		MAPLIST_FLAG_CLEARARRAY|MAPLIST_FLAG_NO_DEFAULT)
@@ -2081,268 +1946,277 @@ stock InitializeOfficialMapList()
 		LogMessage("Loaded map list for %s.", g_GameModName);
 	}
 	// Check if the map list was ever loaded
-	else if (g_mapOfficialFileSerial == -1)
+	else if(g_mapOfficialFileSerial == -1)
 	{
 		LogMessage("No official map list found for %s. Consider submitting one!", g_GameModName);
 	}
 }
 
-stock bool:IsMapEndVoteAllowed()
+stock bool IsMapEndVoteAllowed()
 {
-	if (!GetConVarBool(g_Cvar_EndOfMapVote) || g_MapVoteCompleted || g_HasVoteStarted)
-	{
+	if(!GetConVarBool(g_Cvar_EndOfMapVote) || g_MapVoteCompleted || g_HasVoteStarted)
 		return false;
-	}
-	else
-	{
-		return true;
-	}
+	return true;
 }
 
-public Native_IsMapOfficial(Handle:plugin, numParams)
+public int Native_IsMapOfficial(Handle plugin, int numParams)
 {
-	new len;
+	int len;
 	GetNativeStringLength(1, len);
 
-	if (len <= 0)
-	{
-	  return false;
-	}
+	if(len <= 0)
+		return false;
 
-	new String:map[len+1];
+	char[] map = new char[len+1];
 	GetNativeString(1, map, len+1);
 
 	return InternalIsMapOfficial(map);
 }
 
-bool:InternalIsMapOfficial(const String:mapname[])
+bool InternalIsMapOfficial(const char[] mapname)
 {
-	new officialMapIndex = FindStringInArray(g_OfficialList, mapname);
+	int officialMapIndex = FindStringInArray(g_OfficialList, mapname);
 	return (officialMapIndex > -1);
 }
 
-public Native_IsWarningTimer(Handle:plugin, numParams)
+public int Native_IsWarningTimer(Handle plugin, int numParams)
 {
 	return g_WarningInProgress;
 }
 
-public Native_CanNominate(Handle:plugin, numParams)
+public int Native_CanNominate(Handle plugin, int numParams)
 {
-	if (g_HasVoteStarted)
+	if(g_HasVoteStarted)
 	{
-		return _:CanNominate_No_VoteInProgress;
+		return view_as<int>(CanNominate_No_VoteInProgress);
 	}
 
-	if (g_MapVoteCompleted)
+	if(g_MapVoteCompleted)
 	{
-		return _:CanNominate_No_VoteComplete;
+		return view_as<int>(CanNominate_No_VoteComplete);
 	}
 
-	if (g_NominateCount >= GetVoteSize())
+	if(g_NominateCount >= GetVoteSize())
 	{
-		return _:CanNominate_No_VoteFull;
+		return view_as<int>(CanNominate_No_VoteFull);
 	}
 
-	return _:CanNominate_Yes;
+	return view_as<int>(CanNominate_Yes);
 }
 
-public Native_ExcludeMap(Handle:plugin, numParams)
+public int Native_ExcludeMap(Handle plugin, int numParams)
 {
-	new len;
+	int len;
 	GetNativeStringLength(1, len);
 
-	if (len <= 0)
-	{
+	if(len <= 0)
 		return false;
-	}
 
-	new String:map[len+1];
+	char[] map = new char[len+1];
 	GetNativeString(1, map, len+1);
 
-	PushArrayString(g_OldMapList, map);
-
-	if (GetArraySize(g_OldMapList) > GetConVarInt(g_Cvar_ExcludeMaps))
-	{
-		RemoveFromArray(g_OldMapList, 0);
-	}
+	int Cooldown = InternalGetMapCooldown(map);
+	g_OldMapList.SetValue(map, Cooldown, true);
 
 	return true;
 }
 
-stock AddMapItem(const String:map[])
+public int Native_GetMapCooldown(Handle plugin, int numParams)
 {
-	if (g_NativeVotes)
-	{
+	int len;
+	GetNativeStringLength(1, len);
+
+	if(len <= 0)
+		return false;
+
+	char[] map = new char[len+1];
+	GetNativeString(1, map, len+1);
+
+	int Cooldown = 0;
+	g_OldMapList.GetValue(map, Cooldown);
+
+	return Cooldown;
+}
+
+public int Native_GetMapMinPlayers(Handle plugin, int numParams)
+{
+	int len;
+	GetNativeStringLength(1, len);
+
+	if(len <= 0)
+		return false;
+
+	char[] map = new char[len+1];
+	GetNativeString(1, map, len+1);
+
+	return InternalGetMapMinPlayers(map);
+}
+
+public int Native_GetMapMaxPlayers(Handle plugin, int numParams)
+{
+	int len;
+	GetNativeStringLength(1, len);
+
+	if(len <= 0)
+		return false;
+
+	char[] map = new char[len+1];
+	GetNativeString(1, map, len+1);
+
+	return InternalGetMapMaxPlayers(map);
+}
+
+public int Native_GetMapPlayerRestriction(Handle plugin, int numParams)
+{
+	int len;
+	GetNativeStringLength(1, len);
+
+	if(len <= 0)
+		return false;
+
+	char[] map = new char[len+1];
+	GetNativeString(1, map, len+1);
+
+	return InternalGetMapPlayerRestriction(map);
+}
+
+stock void AddMapItem(const char[] map)
+{
+	if(g_NativeVotes)
 		NativeVotes_AddItem(g_VoteMenu, map, map);
-	}
 	else
-	{
 		AddMenuItem(g_VoteMenu, map, map);
-	}
 }
 
-stock GetMapItem(Handle:menu, position, String:map[], mapLen)
+stock void GetMapItem(Handle menu, int position, char[] map, int mapLen)
 {
-	if (g_NativeVotes)
-	{
+	if(g_NativeVotes)
 		NativeVotes_GetItem(menu, position, map, mapLen);
-	}
 	else
-	{
 		GetMenuItem(menu, position, map, mapLen);
-	}
 }
 
-stock AddExtendToMenu(Handle:menu, MapChange:when)
+stock void AddExtendToMenu(Handle menu, MapChange when)
 {
 	/* Do we add any special items? */
 	// Moved for Mapchooser Extended
 
-	if ((when == MapChange_Instant || when == MapChange_RoundEnd) && GetConVarBool(g_Cvar_DontChange))
+	if((when == MapChange_Instant || when == MapChange_RoundEnd) && GetConVarBool(g_Cvar_DontChange))
 	{
-		if (g_NativeVotes)
-		{
-			// Built-in votes don't have "Don't Change", send Extend instead
+		// Built-in votes doesn't have "Don't Change", send Extend instead
+		if(g_NativeVotes)
 			NativeVotes_AddItem(menu, VOTE_DONTCHANGE, "Don't Change");
-		}
 		else
-		{
 			AddMenuItem(menu, VOTE_DONTCHANGE, "Don't Change");
-		}
 	}
-	else if (GetConVarBool(g_Cvar_Extend) && g_Extends < GetConVarInt(g_Cvar_Extend))
+	else if(GetConVarBool(g_Cvar_Extend) && g_Extends < GetConVarInt(g_Cvar_Extend))
 	{
-		if (g_NativeVotes)
-		{
+		if(g_NativeVotes)
 			NativeVotes_AddItem(menu, VOTE_EXTEND, "Extend Map");
-		}
 		else
-		{
 			AddMenuItem(menu, VOTE_EXTEND, "Extend Map");
-		}
 	}
 }
 
-// Using this stock REQUIRES you to add the following to AskPluginLoad2:
-// MarkNativeAsOptional("GetEngineVersion");
-stock EngineVersion:GetEngineVersionCompat()
+stock int GetVoteSize()
 {
-	new EngineVersion:version;
-	if (GetFeatureStatus(FeatureType_Native, "GetEngineVersion") != FeatureStatus_Available)
-	{
-		new sdkVersion = GuessSDKVersion();
-		switch (sdkVersion)
-		{
-			case SOURCE_SDK_ORIGINAL:
-			{
-				version = Engine_Original;
-			}
-
-			case SOURCE_SDK_DARKMESSIAH:
-			{
-				version = Engine_DarkMessiah;
-			}
-
-			case SOURCE_SDK_EPISODE1:
-			{
-				version = Engine_SourceSDK2006;
-			}
-
-			case SOURCE_SDK_EPISODE2:
-			{
-				version = Engine_SourceSDK2007;
-			}
-
-			case SOURCE_SDK_BLOODYGOODTIME:
-			{
-				version = Engine_BloodyGoodTime;
-			}
-
-			case SOURCE_SDK_EYE:
-			{
-				version = Engine_EYE;
-			}
-
-			case SOURCE_SDK_CSS:
-			{
-				version = Engine_CSS;
-			}
-
-			case SOURCE_SDK_EPISODE2VALVE:
-			{
-				decl String:gameFolder[PLATFORM_MAX_PATH];
-				GetGameFolderName(gameFolder, PLATFORM_MAX_PATH);
-				if (StrEqual(gameFolder, "dod", false))
-				{
-					version = Engine_DODS;
-				}
-				else if (StrEqual(gameFolder, "hl2mp", false))
-				{
-					version = Engine_HL2DM;
-				}
-				else
-				{
-					version = Engine_TF2;
-				}
-			}
-
-			case SOURCE_SDK_LEFT4DEAD:
-			{
-				version = Engine_Left4Dead;
-			}
-
-			case SOURCE_SDK_LEFT4DEAD2:
-			{
-				decl String:gameFolder[PLATFORM_MAX_PATH];
-				GetGameFolderName(gameFolder, PLATFORM_MAX_PATH);
-				if (StrEqual(gameFolder, "nd", false))
-				{
-					version = Engine_NuclearDawn;
-				}
-				else
-				{
-					version = Engine_Left4Dead2;
-				}
-			}
-
-			case SOURCE_SDK_ALIENSWARM:
-			{
-				version = Engine_AlienSwarm;
-			}
-
-			case SOURCE_SDK_CSGO:
-			{
-				version = Engine_CSGO;
-			}
-
-			default:
-			{
-				version = Engine_Unknown;
-			}
-		}
-	}
-	else
-	{
-		version = GetEngineVersion();
-	}
-
-	return version;
-}
-
-GetVoteSize()
-{
-	new voteSize = GetConVarInt(g_Cvar_IncludeMaps);
+	int voteSize = GetConVarInt(g_Cvar_IncludeMaps);
 
 	// New in 1.9.5 to let us bump up the included maps count
-	if (g_NativeVotes)
+	if(g_NativeVotes)
 	{
-		new max = NativeVotes_GetMaxItems();
+		int max = NativeVotes_GetMaxItems();
 
-		if (max < voteSize)
-		{
+		if(max < voteSize)
 			voteSize = max;
-		}
 	}
 
 	return voteSize;
+}
+
+stock int InternalGetMapCooldown(const char[] map)
+{
+	int Cooldown = g_Cvar_ExcludeMaps.IntValue;
+
+	if(g_Config && g_Config.JumpToKey(map))
+	{
+		Cooldown = g_Config.GetNum("Cooldown", Cooldown);
+		g_Config.Rewind();
+	}
+
+	return Cooldown;
+}
+
+void CheckMapPlayerRestriction()
+{
+	static char map[PLATFORM_MAX_PATH];
+	for(int i = 0; i < GetArraySize(g_NominateList); i++)
+	{
+		int client = GetArrayCell(g_NominateOwners, i);
+		if(CheckCommandAccess(client, "sm_nominate_ignore", ADMFLAG_CHEATS, true))
+			continue;
+
+		GetArrayString(g_NominateList, i, map, PLATFORM_MAX_PATH);
+		int Restriction = InternalGetMapPlayerRestriction(map);
+		if(Restriction)
+		{
+			Call_StartForward(g_NominationsResetForward);
+			Call_PushString(map);
+			Call_PushCell(GetArrayCell(g_NominateOwners, i));
+			Call_Finish();
+
+			RemoveFromArray(g_NominateList, i);
+			RemoveFromArray(g_NominateOwners, i);
+			g_NominateCount--;
+
+			if(Restriction < 0)
+				CPrintToChat(client, "[MCE] %t", "Nomination Removed MinPlayers Error", map);
+			else if(Restriction > 0)
+				CPrintToChat(client, "[MCE] %t", "Nomination Removed MaxPlayers Error", map);
+		}
+	}
+}
+
+stock int InternalGetMapMinPlayers(const char[] map)
+{
+	int MinPlayers = 0;
+
+	if(g_Config && g_Config.JumpToKey(map))
+	{
+		MinPlayers = g_Config.GetNum("MinPlayers", MinPlayers);
+		g_Config.Rewind();
+	}
+
+	return MinPlayers;
+}
+
+stock int InternalGetMapMaxPlayers(const char[] map)
+{
+	int MaxPlayers = 0;
+
+	if(g_Config && g_Config.JumpToKey(map))
+	{
+		MaxPlayers = g_Config.GetNum("MaxPlayers", MaxPlayers);
+		g_Config.Rewind();
+	}
+
+	return MaxPlayers;
+}
+
+// <0 = Less than MinPlayers
+// 0 = Okay
+// >0 = More than MaxPlayers
+stock int InternalGetMapPlayerRestriction(const char[] map)
+{
+	int NumPlayers = GetClientCount();
+	int MinPlayers = InternalGetMapMinPlayers(map);
+	int MaxPlayers = InternalGetMapMaxPlayers(map);
+
+	if(MinPlayers && NumPlayers < MinPlayers)
+		return NumPlayers - MinPlayers;
+
+	if(MaxPlayers && NumPlayers > MaxPlayers)
+		return NumPlayers - MaxPlayers;
+
+	return 0;
 }

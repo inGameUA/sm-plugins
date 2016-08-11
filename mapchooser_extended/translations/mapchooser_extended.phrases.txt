@@ -106,4 +106,33 @@
 		"en"		"*{1}"
 	}
 
+	"Map Nominate MinPlayers Error"
+	{
+		"#format"		"{1:d}"
+		"en"			"Map requires {1} more players."
+	}
+
+	"Map Nominate MaxPlayers Error"
+	{
+		"#format"		"{1:d}"
+		"en"			"Map requires {1} less players."
+	}
+
+	"Map Player Restriction"
+	{
+		"#format"		"{1:s},{2:d}"
+		"en"			"Players{1}{2}"
+	}
+
+	"Nomination Removed MinPlayers Error"
+	{
+		"#format"		"{1:s}"
+		"en"			"Your nomination {1} has been removed because it doesn't meet the minimum player requirements."
+	}
+
+	"Nomination Removed MaxPlayers Error"
+	{
+		"#format"		"{1:s}"
+		"en"			"Your nomination {1} has been removed because it exceeds the maximum player restriction."
+	}
 }

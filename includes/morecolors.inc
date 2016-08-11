@@ -351,7 +351,7 @@ stock CReplyToCommand(client, const String:message[], any:...) {
 	decl String:buffer[MAX_BUFFER_LENGTH];
 	SetGlobalTransTarget(client);
 	VFormat(buffer, sizeof(buffer), message, 3);
-	if(GetCmdReplySource() == SM_REPLY_TO_CONSOLE) {
+	if(!client || GetCmdReplySource() == SM_REPLY_TO_CONSOLE) {
 		CRemoveTags(buffer, sizeof(buffer));
 		PrintToConsole(client, "%s", buffer);
 	} else {

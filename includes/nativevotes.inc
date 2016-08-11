@@ -457,8 +457,8 @@ stock NativeVotes_FixResults(num_clients,
 							num_items,
 							const item_indexes[],
 							const item_votes[],
-							client_info[][2], 
-							item_info[][2])
+							client_info[][], 
+							item_info[][])
 {
 	for (new i = 0; i < num_clients; ++i)
 	{
