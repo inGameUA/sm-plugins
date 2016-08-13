@@ -2430,14 +2430,11 @@ public void OnClientPostAdminCheck(int client)
 	if (!ConfigForward(client))
 		return;
 
-	if (!CheckCommandAccess(client, "sm_tag", ADMFLAG_CUSTOM1))
-		return;
-
 	char auth[32];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
 	KvRewind(g_hConfigFile);
 
-	if (!KvJumpToKey(g_hConfigFile, auth))
+	if (!CheckCommandAccess(client, "sm_tag", ADMFLAG_CUSTOM1) || !KvJumpToKey(g_hConfigFile, auth))
 	{
 		KvRewind(g_hConfigFile);
 		KvGotoFirstSubKey(g_hConfigFile);
