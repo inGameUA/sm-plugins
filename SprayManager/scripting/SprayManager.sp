@@ -65,7 +65,7 @@ public Plugin myinfo =
 	name		= "Spray Manager",
 	description	= "A plugin to help manage player sprays.",
 	author		= "Obus",
-	version		= "1.2.1",
+	version		= "1.2.2",
 	url			= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
@@ -200,8 +200,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
 	{
 		if (!g_bSprayBanned[client] && !g_bSprayHashBanned[client])
 		{
-			if (TracePlayerAnglesRanged(client, 128.0))
-				return Plugin_Continue;
+			if (IsPlayerAlive(client))
+				if (TracePlayerAnglesRanged(client, 128.0))
+					return Plugin_Continue;
 
 			ForceSpray(client, client, false);
 			g_fNextSprayTime[client] = 0.0;
@@ -1282,7 +1283,7 @@ public Action Command_AdminSpray(int client, int argc)
 		for (int i = 0; i < iTargetCount; i++)
 		{
 			g_bAllowSpray = true;
-			ForceSpray(client, iTargets[i]);
+			ForceSpray(client, iTargets[i], false);
 		}
 
 		PrintToChat(client, "\x01\x04[SprayManager]\x01 Sprayed \x04%s\x01's spray(s).", sTargetName);
@@ -1294,7 +1295,7 @@ public Action Command_AdminSpray(int client, int argc)
 	TracePlayerAngles(client, vecEndPos);
 
 	g_bAllowSpray = true;
-	ForceSpray(client, client);
+	ForceSpray(client, client, false);
 
 	PrintToChat(client, "\x01\x04[SprayManager]\x01 Sprayed your own spray.");
 
@@ -1358,27 +1359,47 @@ public Action Command_SprayUnban(int client, int argc)
 
 public Action Command_BanSpray(int client, int argc)
 {
-	if (argc < 1)
+	if (argc > 0)
 	{
-		ReplyToCommand(client, "[SprayManager] Usage: sm_banspray <target>");
-		return Plugin_Handled;
+		int iTarget;
+		char sTarget[32];
+
+		GetCmdArg(1, sTarget, sizeof(sTarget));
+
+		if ((iTarget = FindTarget(client, sTarget)) <= 0)
+			return Plugin_Handled;
+
+		if (!BanClientSpray(iTarget))
+		{
+			ReplyToCommand(client, "[SprayManager] %N's spray is already blacklisted.", iTarget);
+			return Plugin_Handled;
+		}
+
+		PrintToChatAll("\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", client, iTarget);
+	}
+	
+	float vecEndPos[3];
+
+	if (TracePlayerAngles(client, vecEndPos))
+	{
+	 	for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
+				continue;
+
+			if (!BanClientSpray(i))
+			{
+				ReplyToCommand(client, "[SprayManager] %N's spray is already blacklisted.", i);
+				return Plugin_Handled;
+			}
+
+			PrintToChat(client, "\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", client, i);
+
+			return Plugin_Handled;
+		}
 	}
 
-	int iTarget;
-	char sTarget[32];
-
-	GetCmdArg(1, sTarget, sizeof(sTarget));
-
-	if ((iTarget = FindTarget(client, sTarget)) <= 0)
-		return Plugin_Handled;
-
-	if (!BanClientSpray(iTarget))
-	{
-		ReplyToCommand(client, "[SprayManager] %N's spray is already blacklisted.", iTarget);
-		return Plugin_Handled;
-	}
-
-	PrintToChatAll("\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", client, iTarget);
+	PrintToChat(client, "\x01\x04[SprayManager]\x01 No spray could be found.");
 
 	return Plugin_Handled;
 }
