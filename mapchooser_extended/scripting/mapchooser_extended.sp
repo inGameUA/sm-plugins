@@ -1141,6 +1141,10 @@ void InitiateVote(MapChange when, Handle inputlist=INVALID_HANDLE)
 			GetArrayString(g_NextMapList, count, map, PLATFORM_MAX_PATH);
 			count++;
 
+			// Honor map restriction.
+			if(InternalGetMapPlayerRestriction(map) != 0)
+				continue;
+
 			if(randomizeList == INVALID_HANDLE)
 			{
 				/* Insert the map and increment our count */
