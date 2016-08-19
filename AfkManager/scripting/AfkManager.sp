@@ -2,6 +2,10 @@
 #include <sdktools>
 #include <cstrike>
 
+#undef REQUIRE_PLUGIN
+#include <zombiereloaded>
+#define REQUIRE_PLUGIN
+
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -14,7 +18,14 @@ float g_Players_fEyePosition[MAXPLAYERS + 1][3];
 int g_Players_iButtons[MAXPLAYERS + 1];
 int g_Players_iSpecMode[MAXPLAYERS + 1];
 int g_Players_iSpecTarget[MAXPLAYERS + 1];
-bool g_Players_bTeleported[MAXPLAYERS + 1];
+int g_Players_iIgnore[MAXPLAYERS + 1];
+
+enum
+{
+	IGNORE_EYEPOSITION = 1,
+	IGNORE_TEAMSWITCH = 2,
+	IGNORE_OBSERVER = 4
+}
 
 float g_fKickTime;
 float g_fMoveTime;
@@ -28,7 +39,7 @@ public Plugin myinfo =
 	name = "Good AFK Manager",
 	author = "BotoX",
 	description = "A good AFK manager?",
-	version = "1.2",
+	version = "1.3",
 	url = ""
 };
 
@@ -60,10 +71,10 @@ public void Cvar_Immunity(ConVar convar, const char[] oldValue, const char[] new
 public void OnPluginStart()
 {
 	Handle cvar;
-	HookConVarChange((cvar = CreateConVar("sm_afk_move_min", "4", "Min players for AFK move")), Cvar_MoveMinPlayers);
+	HookConVarChange((cvar = CreateConVar("sm_afk_move_min", "10", "Min players for AFK move")), Cvar_MoveMinPlayers);
 	g_iMoveMinPlayers = GetConVarInt(cvar);
 
-	HookConVarChange((cvar = CreateConVar("sm_afk_kick_min", "6", "Min players for AFK kick")), Cvar_KickMinPlayers);
+	HookConVarChange((cvar = CreateConVar("sm_afk_kick_min", "30", "Min players for AFK kick")), Cvar_KickMinPlayers);
 	g_iKickMinPlayers = GetConVarInt(cvar);
 
 	HookConVarChange((cvar = CreateConVar("sm_afk_move_time", "60.0", "Time in seconds for AFK Move. 0 = DISABLED")), Cvar_MoveTime);
@@ -82,7 +93,10 @@ public void OnPluginStart()
 
 	AddCommandListener(Command_Say, "say");
 	AddCommandListener(Command_Say, "say_team");
-	HookEvent("player_team", Event_PlayerTeamPost, EventHookMode_Post);
+	HookEvent("player_team", Event_PlayerTeamPost, EventHookMode_PostNoCopy);
+	HookEvent("player_spawn", Event_PlayerSpawnPost, EventHookMode_PostNoCopy);
+	HookEvent("player_death", Event_PlayerDeathPost, EventHookMode_PostNoCopy);
+	HookEvent("round_end", Event_RoundEnd, EventHookMode_Pre);
 
 	HookEntityOutput("trigger_teleport", "OnEndTouch", Teleport_OnEndTouch);
 
@@ -105,87 +119,143 @@ public void OnMapStart()
 	}
 }
 
-int CheckAdminImmunity(int Index)
-{
-	if(!IsClientAuthorized(Index))
-		return false;
-
-	AdminId Id = GetUserAdmin(Index);
-	return GetAdminFlag(Id, Admin_Generic);
-}
-
-void ResetPlayer(int Index)
-{
-	g_Players_bEnabled[Index] = false;
-	g_Players_bFlagged[Index] = false;
-	g_Players_iLastAction[Index] = 0;
-	g_Players_fEyePosition[Index] = view_as<float>({0.0, 0.0, 0.0});
-	g_Players_iButtons[Index] = 0;
-	g_Players_iSpecMode[Index] = 0;
-	g_Players_iSpecTarget[Index] = 0;
-	g_Players_bTeleported[Index] = false;
-}
-
-void InitializePlayer(int Index)
-{
-	if(!(g_iImmunity == 1 && CheckAdminImmunity(Index)))
-	{
-		ResetPlayer(Index);
-		g_Players_iLastAction[Index] = GetTime();
-		g_Players_bEnabled[Index] = true;
-	}
-}
-
 public void OnClientConnected(int client)
 {
 	ResetPlayer(client);
 }
 
-public void OnClientPostAdminCheck(int Index)
+public void OnClientPostAdminCheck(int client)
 {
-	if(!IsFakeClient(Index))
-		InitializePlayer(Index);
+	if(!IsFakeClient(client))
+		InitializePlayer(client);
 }
 
-public void OnClientDisconnect(int Index)
+public void OnClientDisconnect(int client)
 {
-	ResetPlayer(Index);
+	ResetPlayer(client);
 }
 
-public Action Event_PlayerTeamPost(Handle event, const char[] name, bool dontBroadcast)
+int CheckAdminImmunity(int client)
 {
-	int Index = GetClientOfUserId(GetEventInt(event, "userid"));
-	if(Index > 0 && !IsFakeClient(Index))
-		g_Players_iLastAction[Index] = GetTime();
+	if(!IsClientAuthorized(client))
+		return false;
+
+	AdminId Id = GetUserAdmin(client);
+	return GetAdminFlag(Id, Admin_Generic);
 }
 
-public Action Command_Say(int Index, const char[] Command, int Args)
+void ResetPlayer(int client)
 {
-	g_Players_iLastAction[Index] = GetTime();
+	g_Players_bEnabled[client] = false;
+	g_Players_bFlagged[client] = false;
+	g_Players_iLastAction[client] = 0;
+	g_Players_fEyePosition[client] = view_as<float>({0.0, 0.0, 0.0});
+	g_Players_iButtons[client] = 0;
+	g_Players_iIgnore[client] = 0;
 }
 
-public Action OnPlayerRunCmd(int Index, int &iButtons, int &iImpulse, float fVel[3], float fAngles[3], int &iWeapon)
+void InitializePlayer(int client)
 {
-	if(((g_Players_fEyePosition[Index][0] != fAngles[0]) ||
-		(g_Players_fEyePosition[Index][1] != fAngles[1]) ||
-		(g_Players_fEyePosition[Index][2] != fAngles[2]))
-		&& g_Players_iSpecMode[Index] != 4) // OBS_MODE_IN_EYE
+	if(!(g_iImmunity == 1 && CheckAdminImmunity(client)))
+	{
+		ResetPlayer(client);
+		g_Players_iLastAction[client] = GetTime();
+		g_Players_bEnabled[client] = true;
+	}
+}
+
+public void Event_PlayerTeamPost(Handle event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if(client > 0 && !IsFakeClient(client))
+	{
+		if(g_Players_iIgnore[client] & IGNORE_TEAMSWITCH)
+			g_Players_iIgnore[client] &= ~IGNORE_TEAMSWITCH;
+		else
+			g_Players_iLastAction[client] = GetTime();
+	}
+}
+
+public void Event_PlayerSpawnPost(Handle event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if(client > 0 && !IsFakeClient(client))
+		g_Players_iIgnore[client] |= IGNORE_EYEPOSITION;
+}
+
+public void Event_PlayerDeathPost(Handle event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if(client > 0 && !IsFakeClient(client))
+		g_Players_iIgnore[client] |= IGNORE_OBSERVER;
+}
+
+public void Event_RoundEnd(Handle event, const char[] name, bool dontBroadcast)
+{
+	for(int client = 1; client <= MaxClients; client++)
+	{
+		if(g_Players_bEnabled[client])
+			g_Players_iIgnore[client] |= IGNORE_TEAMSWITCH;
+	}
+}
+
+public Action Command_Say(int client, const char[] Command, int Args)
+{
+	g_Players_iLastAction[client] = GetTime();
+
+	return Plugin_Continue;
+}
+
+public Action OnPlayerRunCmd(int client, int &iButtons, int &iImpulse, float fVel[3], float fAngles[3], int &iWeapon)
+{
+	if(IsClientObserver(client))
+	{
+		int iSpecMode = g_Players_iSpecMode[client];
+		int iSpecTarget = g_Players_iSpecTarget[client];
+
+		g_Players_iSpecMode[client] = GetEntProp(client, Prop_Send, "m_iObserverMode");
+		g_Players_iSpecTarget[client] = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
+
+		if(g_Players_iSpecMode[client] == 1) // OBS_MODE_DEATHCAM
+			g_Players_iIgnore[client] |= IGNORE_OBSERVER;
+
+		if(iSpecTarget && g_Players_iSpecTarget[client] != iSpecTarget)
+		{
+			if(iSpecTarget == -1 || g_Players_iSpecTarget[client] == -1 ||
+				!IsClientInGame(iSpecTarget) || !IsPlayerAlive(iSpecTarget))
+				g_Players_iIgnore[client] |= IGNORE_OBSERVER;
+		}
+
+		if((iSpecMode && g_Players_iSpecMode[client] != iSpecMode) || (iSpecTarget && g_Players_iSpecTarget[client] != iSpecTarget))
+		{
+			if(g_Players_iIgnore[client] & IGNORE_OBSERVER)
+				g_Players_iIgnore[client] &= ~IGNORE_OBSERVER;
+			else
+				g_Players_iLastAction[client] = GetTime();
+		}
+	}
+
+	if(((g_Players_fEyePosition[client][0] != fAngles[0]) ||
+		(g_Players_fEyePosition[client][1] != fAngles[1]) ||
+		(g_Players_fEyePosition[client][2] != fAngles[2])) &&
+		(!IsClientObserver(client) ||
+		g_Players_iSpecMode[client] != 4)) // OBS_MODE_IN_EYE
 	{
 		if(!((iButtons & IN_LEFT) || (iButtons & IN_RIGHT)))
 		{
-			if(!g_Players_bTeleported[Index])
-				g_Players_iLastAction[Index] = GetTime();
-
-			g_Players_bTeleported[Index] = true;
+			if(g_Players_iIgnore[client] & IGNORE_EYEPOSITION)
+				g_Players_iIgnore[client] &= ~IGNORE_EYEPOSITION;
+			else
+				g_Players_iLastAction[client] = GetTime();
 		}
 
-		g_Players_fEyePosition[Index] = fAngles;
+		g_Players_fEyePosition[client] = fAngles;
 	}
 
-	if(g_Players_iButtons[Index] != iButtons)
+	if(g_Players_iButtons[client] != iButtons)
 	{
-		g_Players_iLastAction[Index] = GetTime();
-		g_Players_iButtons[Index] = iButtons;
+		g_Players_iLastAction[client] = GetTime();
+		g_Players_iButtons[client] = iButtons;
 	}
 
 	return Plugin_Continue;
@@ -196,19 +266,29 @@ public Action Teleport_OnEndTouch(const char[] output, int caller, int activator
 	if(activator < 1 || activator > MaxClients)
 		return Plugin_Continue;
 
-	g_Players_bTeleported[activator] = true;
+	g_Players_iIgnore[activator] |= IGNORE_EYEPOSITION;
 
 	return Plugin_Continue;
 }
 
+public Action ZR_OnClientInfect(int &client, int &attacker, bool &motherInfect, bool &respawnOverride, bool &respawn)
+{
+	g_Players_iIgnore[client] |= IGNORE_TEAMSWITCH;
+}
+
+public Action ZR_OnClientHuman(int &client, bool &respawn, bool &protect)
+{
+	g_Players_iIgnore[client] |= IGNORE_TEAMSWITCH;
+}
+
 public Action Timer_CheckPlayer(Handle Timer, any Data)
 {
-	int Index;
+	int client;
 	int Clients = 0;
 
-	for(Index = 1; Index <= MaxClients; Index++)
+	for(client = 1; client <= MaxClients; client++)
 	{
-		if(IsClientInGame(Index) && !IsFakeClient(Index))
+		if(IsClientInGame(client) && !IsFakeClient(client))
 			Clients++;
 	}
 
@@ -218,87 +298,73 @@ public Action Timer_CheckPlayer(Handle Timer, any Data)
 	if(!bMovePlayers && !bKickPlayers)
 		return Plugin_Continue;
 
-	for(Index = 1; Index <= MaxClients; Index++)
+	for(client = 1; client <= MaxClients; client++)
 	{
-		if(!g_Players_bEnabled[Index] || !IsClientInGame(Index))
+		if(!g_Players_bEnabled[client])
 			continue;
 
-		int iTeamNum = GetClientTeam(Index);
+		int iTeamNum = GetClientTeam(client);
 
-		if(IsClientObserver(Index))
+		int IdleTime = GetTime() - g_Players_iLastAction[client];
+
+		if(g_Players_bFlagged[client] && (g_fKickTime - IdleTime) > 0.0)
 		{
-			if(iTeamNum > CS_TEAM_SPECTATOR && !IsPlayerAlive(Index))
-				continue;
-
-			int iSpecMode = g_Players_iSpecMode[Index];
-			int iSpecTarget = g_Players_iSpecTarget[Index];
-
-			g_Players_iSpecMode[Index] = GetEntProp(Index, Prop_Send, "m_iObserverMode");
-			g_Players_iSpecTarget[Index] = GetEntPropEnt(Index, Prop_Send, "m_hObserverTarget");
-
-			if((iSpecMode && g_Players_iSpecMode[Index] != iSpecMode) || (iSpecTarget && g_Players_iSpecTarget[Index] != iSpecTarget))
-				g_Players_iLastAction[Index] = GetTime();
+			PrintCenterText(client, "Welcome back!");
+			PrintToChat(client, "\x04[AFK]\x01 You have been un-flagged for being inactive.");
+			g_Players_bFlagged[client] = false;
 		}
 
-		int IdleTime = GetTime() - g_Players_iLastAction[Index];
-
-		if(g_Players_bFlagged[Index] && (g_fKickTime - IdleTime) > 0.0)
-		{
-			PrintCenterText(Index, "Welcome back!");
-			PrintToChat(Index, "\x04[AFK]\x01 You have been un-flagged for being inactive.");
-			g_Players_bFlagged[Index] = false;
-		}
-
-		if(bMovePlayers && iTeamNum > CS_TEAM_SPECTATOR && (!g_iImmunity || g_iImmunity == 2 || !CheckAdminImmunity(Index)))
+		if(bMovePlayers && iTeamNum > CS_TEAM_SPECTATOR && (!g_iImmunity || g_iImmunity == 2 || !CheckAdminImmunity(client)))
 		{
 			float iTimeleft = g_fMoveTime - IdleTime;
 			if(iTimeleft > 0.0)
 			{
 				if(iTimeleft <= g_fWarnTime)
 				{
-					PrintCenterText(Index, "Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
-					PrintToChat(Index, "\x04[AFK]\x01 Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
+					PrintCenterText(client, "Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
+					PrintToChat(client, "\x04[AFK]\x01 Warning: If you do not move in %d seconds, you will be moved to spectate.", RoundToFloor(iTimeleft));
 				}
 			}
 			else
 			{
-				PrintToChatAll("\x04[AFK] \x03%N\x01 was moved to spectate for being AFK too long.", Index);
-				ForcePlayerSuicide(Index);
-				ChangeClientTeam(Index, CS_TEAM_SPECTATOR);
+				PrintToChatAll("\x04[AFK] \x03%N\x01 was moved to spectate for being AFK too long.", client);
+				ForcePlayerSuicide(client);
+				g_Players_iIgnore[client] |= IGNORE_TEAMSWITCH;
+				ChangeClientTeam(client, CS_TEAM_SPECTATOR);
 			}
 		}
-		else if(g_fKickTime > 0.0 && (!g_iImmunity || g_iImmunity == 3 || !CheckAdminImmunity(Index)))
+		else if(g_fKickTime > 0.0 && (!g_iImmunity || g_iImmunity == 3 || !CheckAdminImmunity(client)))
 		{
 			float iTimeleft = g_fKickTime - IdleTime;
 			if(iTimeleft > 0.0)
 			{
 				if(iTimeleft <= g_fWarnTime)
 				{
-					PrintCenterText(Index, "Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
-					PrintToChat(Index, "\x04[AFK]\x01 Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
+					PrintCenterText(client, "Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
+					PrintToChat(client, "\x04[AFK]\x01 Warning: If you do not move in %d seconds, you will be kick-flagged for being inactive.", RoundToFloor(iTimeleft));
 				}
 			}
 			else
 			{
-				if(!g_Players_bFlagged[Index])
+				if(!g_Players_bFlagged[client])
 				{
-					PrintToChat(Index, "\x04[AFK]\x01 You have been kick-flagged for being inactive.");
-					g_Players_bFlagged[Index] = true;
+					PrintToChat(client, "\x04[AFK]\x01 You have been kick-flagged for being inactive.");
+					g_Players_bFlagged[client] = true;
 				}
 				int FlaggedPlayers = 0;
 				int Position = 1;
-				for(int Index_ = 1; Index_ <= MaxClients; Index_++)
+				for(int client_ = 1; client_ <= MaxClients; client_++)
 				{
-					if(!g_Players_bFlagged[Index_])
+					if(!g_Players_bFlagged[client_])
 						continue;
 
 					FlaggedPlayers++;
-					int IdleTime_ = GetTime() - g_Players_iLastAction[Index_];
+					int IdleTime_ = GetTime() - g_Players_iLastAction[client_];
 
 					if(IdleTime_ > IdleTime)
 						Position++;
 				}
-				PrintCenterText(Index, "You have been kick-flagged for being inactive. [%d/%d]", Position, FlaggedPlayers);
+				PrintCenterText(client, "You have been kick-flagged for being inactive. [%d/%d]", Position, FlaggedPlayers);
 			}
 		}
 	}
@@ -308,15 +374,15 @@ public Action Timer_CheckPlayer(Handle Timer, any Data)
 		int InactivePlayer = -1;
 		int InactivePlayerTime = 0;
 
-		for(Index = 1; Index <= MaxClients; Index++)
+		for(client = 1; client <= MaxClients; client++)
 		{
-			if(!g_Players_bEnabled[Index] || !g_Players_bFlagged[Index])
+			if(!g_Players_bEnabled[client] || !g_Players_bFlagged[client])
 				continue;
 
-			int IdleTime = GetTime() - g_Players_iLastAction[Index];
+			int IdleTime = GetTime() - g_Players_iLastAction[client];
 			if(IdleTime >= g_fKickTime && IdleTime > InactivePlayerTime)
 			{
-				InactivePlayer = Index;
+				InactivePlayer = client;
 				InactivePlayerTime = IdleTime;
 			}
 		}
