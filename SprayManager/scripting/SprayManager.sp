@@ -65,7 +65,7 @@ public Plugin myinfo =
 	name		= "Spray Manager",
 	description	= "A plugin to help manage player sprays.",
 	author		= "Obus",
-	version		= "1.2.2",
+	version		= "1.2.3",
 	url			= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
@@ -1376,6 +1376,8 @@ public Action Command_BanSpray(int client, int argc)
 		}
 
 		PrintToChatAll("\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", client, iTarget);
+		
+		return Plugin_Handled;
 	}
 	
 	float vecEndPos[3];
