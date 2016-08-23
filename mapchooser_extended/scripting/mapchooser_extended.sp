@@ -483,7 +483,6 @@ public void OnConfigsExecuted()
 	if(g_Cvar_VoteNextLevel != INVALID_HANDLE)
 		SetConVarBool(g_Cvar_VoteNextLevel, false);
 
-	CreateNextVote();
 	SetupTimeleftTimer();
 
 	g_TotalRounds = 0;
@@ -992,6 +991,7 @@ void InitiateVote(MapChange when, Handle inputlist=INVALID_HANDLE)
 		return;
 
 	CheckMapPlayerRestriction();
+	CreateNextVote();
 
 	g_ChangeTime = when;
 
@@ -1140,10 +1140,6 @@ void InitiateVote(MapChange when, Handle inputlist=INVALID_HANDLE)
 		{
 			GetArrayString(g_NextMapList, count, map, PLATFORM_MAX_PATH);
 			count++;
-
-			// Honor map restriction.
-			if(InternalGetMapPlayerRestriction(map) != 0)
-				continue;
 
 			if(randomizeList == INVALID_HANDLE)
 			{
@@ -1320,7 +1316,6 @@ public void Handler_VoteFinishedGeneric(Handle menu,
 		// We extended, so we'll have to vote again.
 		g_RunoffCount = 0;
 		g_HasVoteStarted = false;
-		CreateNextVote();
 		SetupTimeleftTimer();
 
 	}
@@ -1334,7 +1329,6 @@ public void Handler_VoteFinishedGeneric(Handle menu,
 
 		g_RunoffCount = 0;
 		g_HasVoteStarted = false;
-		CreateNextVote();
 		SetupTimeleftTimer();
 	}
 	else
@@ -1637,7 +1631,7 @@ void CreateNextVote()
 	ClearArray(g_NextMapList);
 
 	static char map[PLATFORM_MAX_PATH];
-	Handle tempMaps  = CloneArray(g_MapList);
+	Handle tempMaps = CloneArray(g_MapList);
 
 	GetCurrentMap(map, PLATFORM_MAX_PATH);
 	RemoveStringFromArray(tempMaps, map);
@@ -1658,8 +1652,14 @@ void CreateNextVote()
 
 	for(int i = 0; i < limit; i++)
 	{
-		int b = GetRandomInt(0, GetArraySize(tempMaps) - 1);
-		GetArrayString(tempMaps, b, map, PLATFORM_MAX_PATH);
+		int b;
+		for(int j = 0; j < 10; j++)
+		{
+			b = GetRandomInt(0, GetArraySize(tempMaps) - 1);
+			GetArrayString(tempMaps, b, map, PLATFORM_MAX_PATH);
+			if(InternalGetMapPlayerRestriction(map) == 0)
+				break;
+		}
 		PushArrayString(g_NextMapList, map);
 		RemoveFromArray(tempMaps, b);
 	}
