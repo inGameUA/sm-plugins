@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <cstrike>
+#include <AfkManager>
 
 #undef REQUIRE_PLUGIN
 #include <zombiereloaded>
@@ -70,7 +71,7 @@ public void Cvar_Immunity(ConVar convar, const char[] oldValue, const char[] new
 
 public void OnPluginStart()
 {
-	Handle cvar;
+	ConVar cvar;
 	HookConVarChange((cvar = CreateConVar("sm_afk_move_min", "10", "Min players for AFK move")), Cvar_MoveMinPlayers);
 	g_iMoveMinPlayers = GetConVarInt(cvar);
 
@@ -101,6 +102,14 @@ public void OnPluginStart()
 	HookEntityOutput("trigger_teleport", "OnEndTouch", Teleport_OnEndTouch);
 
 	AutoExecConfig(true, "plugin.AfkManager");
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("GetClientIdleTime", Native_GetClientIdleTime);
+	RegPluginLibrary("AfkManager");
+
+	return APLRes_Success;
 }
 
 public void OnMapStart()
@@ -401,4 +410,32 @@ public Action Timer_CheckPlayer(Handle Timer, any Data)
 	}
 
 	return Plugin_Continue;
+}
+
+public int Native_GetClientIdleTime(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+
+	if(client > MaxClients || client <= 0)
+	{
+		ThrowNativeError(SP_ERROR_NATIVE, "Client is not valid.");
+		return -1;
+	}
+
+	if(!IsClientInGame(client))
+	{
+		ThrowNativeError(SP_ERROR_NATIVE, "Client is not in-game.");
+		return -1;
+	}
+
+	if(IsFakeClient(client))
+	{
+		ThrowNativeError(SP_ERROR_NATIVE, "Client is fake-client.");
+		return -1;
+	}
+
+	if(!g_Players_bEnabled[client])
+		return 0;
+
+	return GetTime() - g_Players_iLastAction[client];
 }
