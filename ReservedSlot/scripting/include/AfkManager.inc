@@ -1,0 +1,1 @@
+../../../AfkManager/scripting/include/AfkManager.inc
