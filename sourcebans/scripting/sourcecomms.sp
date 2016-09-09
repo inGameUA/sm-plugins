@@ -262,7 +262,7 @@ public OnMapEnd()
 		AND		length = -1",
 		DatabasePrefix, serverID);
 	#if defined LOG_QUERIES
-	LogToFile(logQuery, "OnMapEnd for: %s. QUERY: %s", clientAuth, Query);
+	LogToFile(logQuery, "OnMapEnd. QUERY: %s", Query);
 	#endif
 	SQL_TQuery(g_hDatabase, Query_ErrorCheck, Query);
 
@@ -1360,6 +1360,12 @@ public Query_UnBlockSelect(Handle:owner, Handle:hndl, const String:error[], any:
 			new cImmunity = SQL_FetchInt(hndl, 3);
 			new cType = SQL_FetchInt(hndl, 4);
 
+			new immunity = admin ? GetAdmImmunity(admin) : ConsoleImmunity;
+
+			// Block from CONSOLE (aid=0) and we have `console immunity` value in config
+			if (!cAID && ConsoleImmunity > cImmunity)
+				cImmunity = ConsoleImmunity;
+
 			#if defined DEBUG
 			PrintToServer("Fetched from DB: bid %d, iAID: %d, cAID: %d, cImmunity: %d, cType: %d", bid, iAID, cAID, cImmunity, cType);
 			// WHO WE ARE?
@@ -1370,12 +1376,12 @@ public Query_UnBlockSelect(Handle:owner, Handle:hndl, const String:error[], any:
 				PrintToServer("we are console (possibly)");
 			if (AdmHasFlag(admin))
 				PrintToServer("we have special flag");
-			if (GetAdmImmunity(admin) > cImmunity)
-				PrintToServer("we have %d immunity and block has %d. we cool", GetAdmImmunity(admin), cImmunity);
+			if (immunity >= cImmunity)
+				PrintToServer("we have %d immunity and block has %d. we cool", immunity, cImmunity);
 			#endif
 
 			// Checking - has we access to unblock?
-			if (iAID == cAID || (!admin && StrEqual(adminAuth, "STEAM_ID_SERVER")) || AdmHasFlag(admin) || (DisUBImCheck == 0 && (GetAdmImmunity(admin) > cImmunity)))
+			if (iAID == cAID || (!admin && StrEqual(adminAuth, "STEAM_ID_SERVER")) || AdmHasFlag(admin) || (DisUBImCheck == 0 && (immunity >= cImmunity)))
 			{
 				// Ok! we have rights to unblock
 				b_success = true;
@@ -2102,7 +2108,7 @@ stock CreateBlock(client, targetId = 0, length = -1, type, const String:sReason[
 		return;
 	}
 
-	new admImmunity = GetAdmImmunity(client);
+	new admImmunity = client ? GetAdmImmunity(client) : ConsoleImmunity;
 	decl String:adminAuth[64];
 
 	if (client && IsClientInGame(client))
