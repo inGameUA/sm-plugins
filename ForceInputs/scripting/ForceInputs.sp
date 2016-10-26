@@ -71,11 +71,14 @@ public Action Command_ForceInputPlayer(int client, int args)
 
 	for(int i = 0; i < TargetCount; i++)
 	{
-		if (sArguments[2][0])
+		if(!IsValidEntity(aTargetList[i]))
+			continue;
+
+		if(sArguments[2][0])
 			SetVariantString(sArguments[2]);
 
 		AcceptEntityInput(aTargetList[i], sArguments[1], aTargetList[i], aTargetList[i]);
-		ReplyToCommand(client, "[SM] Input succesfull.");
+		ReplyToCommand(client, "[SM] Input successful.");
 	}
 
 	return Plugin_Handled;
@@ -103,7 +106,7 @@ public Action Command_ForceInput(int client, int args)
 			SetVariantString(sArguments[2]);
 
 		AcceptEntityInput(client, sArguments[1], client, client);
-		ReplyToCommand(client, "[SM] Input succesfull.");
+		ReplyToCommand(client, "[SM] Input successful.");
 	}
 	else if(StrEqual(sArguments[0], "!target"))
 	{
@@ -125,7 +128,7 @@ public Action Command_ForceInput(int client, int args)
 				SetVariantString(sArguments[2]);
 
 			AcceptEntityInput(entity, sArguments[1], client, client);
-			ReplyToCommand(client, "[SM] Input succesfull.");
+			ReplyToCommand(client, "[SM] Input successful.");
 		}
 	}
 	else
@@ -135,19 +138,19 @@ public Action Command_ForceInput(int client, int args)
 		int entity = INVALID_ENT_REFERENCE;
 		while((entity = FindEntityByClassname(entity, "*")) != INVALID_ENT_REFERENCE)
 		{
-			char sClassname[64];
-			char sTargetname[64];
+			static char sClassname[64];
+			static char sTargetname[64];
 			GetEntPropString(entity, Prop_Data, "m_iClassname", sClassname, sizeof(sClassname));
 			GetEntPropString(entity, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
 
 			if(strncmp(sClassname, sArguments[0], Wildcard, false) == 0
 				|| strncmp(sTargetname, sArguments[0], Wildcard, false) == 0)
 			{
-				if (sArguments[2][0])
+				if(sArguments[2][0])
 					SetVariantString(sArguments[2]);
 
 				AcceptEntityInput(entity, sArguments[1], client, client);
-				ReplyToCommand(client, "[SM] Input succesfull.");
+				ReplyToCommand(client, "[SM] Input successful.");
 			}
 		}
 	}

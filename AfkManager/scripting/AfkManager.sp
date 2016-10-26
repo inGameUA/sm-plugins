@@ -94,9 +94,9 @@ public void OnPluginStart()
 
 	AddCommandListener(Command_Say, "say");
 	AddCommandListener(Command_Say, "say_team");
-	HookEvent("player_team", Event_PlayerTeamPost, EventHookMode_PostNoCopy);
-	HookEvent("player_spawn", Event_PlayerSpawnPost, EventHookMode_PostNoCopy);
-	HookEvent("player_death", Event_PlayerDeathPost, EventHookMode_PostNoCopy);
+	HookEvent("player_team", Event_PlayerTeamPost, EventHookMode_Post);
+	HookEvent("player_spawn", Event_PlayerSpawnPost, EventHookMode_Post);
+	HookEvent("player_death", Event_PlayerDeathPost, EventHookMode_Post);
 	HookEvent("round_end", Event_RoundEnd, EventHookMode_Pre);
 
 	HookEntityOutput("trigger_teleport", "OnEndTouch", Teleport_OnEndTouch);

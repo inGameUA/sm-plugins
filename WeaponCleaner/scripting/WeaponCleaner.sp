@@ -24,7 +24,7 @@ public Plugin myinfo =
 	name 			= "WeaponCleaner",
 	author 			= "BotoX",
 	description 	= "Clean unneeded weapons",
-	version 		= "2.1",
+	version 		= "2.2",
 	url 			= ""
 };
 
@@ -65,12 +65,12 @@ public void OnConVarChanged(ConVar convar, const char[] oldValue, const char[] n
 					continue;
 
 				// Kill it
-				AcceptEntityInput(G_WeaponArray[0][0], "Kill");
-				// This implicitly calls OnEntityDestroyed() which calls RemoveWeapon()
-
-				// Move index backwards (since the list was modified by removing it)
-				i--;
-				d--;
+				if(KillWeapon(G_WeaponArray[i][0]))
+				{
+					// Move index backwards (since the list was modified by removing it)
+					i--;
+					d--;
+				}
 			}
 		}
 		g_MaxWeapons = StringToInt(newValue);
@@ -129,7 +129,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public void OnEntityDestroyed(int entity)
 {
-	RemoveWeapon(entity);
+	RemoveWeapon(EntIndexToEntRef(EntRefToEntIndex(entity)));
 }
 
 public void OnWeaponSpawned(int entity)
@@ -157,7 +157,7 @@ public Action OnWeaponEquip(int client, int entity)
 		return;
 
 	// Weapon should not be cleaned anymore
-	RemoveWeapon(entity);
+	RemoveWeapon(EntIndexToEntRef(entity));
 }
 
 public Action OnWeaponDrop(int client, int entity)
@@ -184,6 +184,8 @@ public Action OnWeaponDrop(int client, int entity)
 
 bool InsertWeapon(int entity)
 {
+	int entref = EntIndexToEntRef(entity);
+
 	// Try to find a free slot
 	for(int i = 0; i < g_MaxWeapons; i++)
 	{
@@ -191,28 +193,27 @@ bool InsertWeapon(int entity)
 			continue;
 
 		// Found a free slot, add it here
-		G_WeaponArray[i][0] = entity;
+		G_WeaponArray[i][0] = entref;
 		G_WeaponArray[i][1] = GetTime();
 		return true;
 	}
 
 	// No free slot found
 	// Kill the first (oldest) item in the list
-	AcceptEntityInput(G_WeaponArray[0][0], "Kill");
-	// This implicitly calls OnEntityDestroyed() which calls RemoveWeapon()
+	KillWeapon(G_WeaponArray[0][0]);
 
 	// Add new weapon to the end of the list
-	G_WeaponArray[g_MaxWeapons - 1][0] = entity;
+	G_WeaponArray[g_MaxWeapons - 1][0] = entref;
 	G_WeaponArray[g_MaxWeapons - 1][1] = GetTime();
 	return true;
 }
 
-bool RemoveWeapon(int entity)
+bool RemoveWeapon(int entref)
 {
 	// Find the Weapon
 	for(int i = 0; i < g_MaxWeapons; i++)
 	{
-		if(G_WeaponArray[i][0] == entity)
+		if(G_WeaponArray[i][0] == entref)
 		{
 			G_WeaponArray[i][0] = 0; G_WeaponArray[i][1] = 0;
 
@@ -243,13 +244,28 @@ bool CheckWeapons()
 		if(g_MaxWeaponLifetime && GetTime() - G_WeaponArray[i][1] >= g_MaxWeaponLifetime)
 		{
 			// Kill it
-			AcceptEntityInput(G_WeaponArray[i][0], "Kill");
-			// This implicitly calls OnEntityDestroyed() which calls RemoveWeapon()
-
-			// Move index backwards (since the list was modified by removing it)
-			i--;
+			if(KillWeapon(G_WeaponArray[i][0]))
+			{
+				// Move index backwards (since the list was modified by removing it)
+				i--;
+			}
 		}
 	}
+	return true;
+}
+
+bool KillWeapon(int entref)
+{
+	if(!IsValidEntity(entref))
+		return RemoveWeapon(entref);
+
+	// This implicitly calls OnEntityDestroyed() on success which calls RemoveWeapon()
+	AcceptEntityInput(entref, "Kill");
+
+	// Not successful?
+	if(IsValidEntity(entref))
+		return RemoveWeapon(entref);
+
 	return true;
 }
 

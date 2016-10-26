@@ -99,7 +99,7 @@ public Action OnCheatCommand(int client, const char[] command, int argc)
 	if(IsClientAuthorized(client) && CheckCommandAccess(client, "", ADMFLAG_CHEATS))
 		return Plugin_Continue;
 
-	PrintToConsole(client, "denied :^)");
+	//PrintToConsole(client, "denied :^)");
 	return Plugin_Handled;
 }
 
@@ -114,7 +114,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	if(IsClientAuthorized(client) && CheckCommandAccess(client, "", ADMFLAG_CHEATS))
 		return Plugin_Continue;
 
-	PrintToConsole(client, "denied :^)");
+	//PrintToConsole(client, "denied :^)");
 	return Plugin_Handled;
 }
 

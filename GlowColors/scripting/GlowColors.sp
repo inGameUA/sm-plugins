@@ -41,8 +41,8 @@ public void OnPluginStart()
 
 	RegAdminCmd("sm_rainbow", Command_Rainbow, ADMFLAG_CUSTOM1, "Enable rainbow glowcolors. sm_rainbow [frequency]");
 
-	HookEvent("player_spawn", Event_ApplyGlowcolor, EventHookMode_PostNoCopy);
-	HookEvent("player_team", Event_ApplyGlowcolor, EventHookMode_PostNoCopy);
+	HookEvent("player_spawn", Event_ApplyGlowcolor, EventHookMode_Post);
+	HookEvent("player_team", Event_ApplyGlowcolor, EventHookMode_Post);
 
 	LoadConfig();
 

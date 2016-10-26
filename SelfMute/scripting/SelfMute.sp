@@ -998,7 +998,7 @@ public void OnPlayerRadio(DataPack pack)
 	}
 	CloseHandle(pack);
 
-	Handle RadioText = StartMessage("RadioText", g_MsgPlayers, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+	Handle RadioText = StartMessage("RadioText", g_MsgPlayers, playersNum, USERMSG_RELIABLE);
 	if(g_bIsProtoBuf)
 	{
 		PbSetInt(RadioText, "msg_dst", g_MsgDest);
@@ -1021,7 +1021,7 @@ public void OnPlayerRadio(DataPack pack)
 	}
 	EndMessage();
 
-	Handle SendAudio = StartMessage("SendAudio", g_MsgPlayers, playersNum, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+	Handle SendAudio = StartMessage("SendAudio", g_MsgPlayers, playersNum, USERMSG_RELIABLE);
 	if(g_bIsProtoBuf)
 		PbSetString(SendAudio, "radio_sound", g_MsgRadioSound);
 	else
