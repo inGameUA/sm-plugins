@@ -16,21 +16,28 @@ bool g_bInfAmmo[MAXPLAYERS + 1] = {false, ...};
 
 ConVar g_CVar_sv_pausable;
 ConVar g_CVar_sv_bombanywhere;
-bool g_bPaused;
+
+static char g_sServerCanExecuteCmds[][] = {	"cl_soundscape_flush", "r_screenoverlay", "playgamesound",
+						"slot0", "slot1", "slot2", "slot3", "slot4", "slot5", "slot6",
+						"slot7", "slot8", "slot9", "slot10", "cl_spec_mode", "cancelselect",
+						"invnext", "play", "invprev", "sndplaydelay", "lastinv", "dsp_player",
+						"name", "redirect", "retry", "r_cleardecals", "echo", "soundfade"	};
 
 public Plugin myinfo =
 {
 	name 		= "Advanced Commands",
 	author 		= "BotoX + Obus",
 	description	= "Adds extra commands for admins.",
-	version 	= "1.5",
+	version 	= "1.8",
 	url 		= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
 
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
+
 	RegAdminCmd("sm_hp", Command_Health, ADMFLAG_GENERIC, "sm_hp <#userid|name> <value>");
+	RegAdminCmd("sm_health", Command_Health, ADMFLAG_GENERIC, "sm_health <#userid|name> <value>");
 	RegAdminCmd("sm_armor", Command_Armor, ADMFLAG_GENERIC, "sm_armor <#userid|name> <value>");
 	RegAdminCmd("sm_weapon", Command_Weapon, ADMFLAG_GENERIC, "sm_weapon <#userid|name> <name> [clip] [ammo]");
 	RegAdminCmd("sm_give", Command_Weapon, ADMFLAG_GENERIC, "sm_give <#userid|name> <name> [clip] [ammo]");
@@ -47,6 +54,8 @@ public void OnPluginStart()
 	RegAdminCmd("sm_getinfo", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_getmodel", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_fcvar", Command_ForceCVar, ADMFLAG_CHEATS, "sm_fcvar <#userid|name> <cvar> <value>");
+	RegAdminCmd("sm_setclantag", Command_SetClanTag, ADMFLAG_CHEATS, "sm_setclantag <#userid|name> [text]");
+	RegAdminCmd("sm_fakecommand", Command_FakeCommand, ADMFLAG_CHEATS, "sm_fakecommand <#userid|name> [command] [args]");
 
 	HookEvent("bomb_planted", Event_BombPlanted, EventHookMode_Pre);
 	HookEvent("bomb_defused", Event_BombDefused, EventHookMode_Pre);
@@ -86,6 +95,8 @@ public void OnMapStart()
 
 public Action Listener_Pause(int client, const char[] command, int argc)
 {
+	static bool bPaused;
+
 	if(!g_CVar_sv_pausable.BoolValue)
 	{
 		ReplyToCommand(client, "sv_pausable is set to 0!");
@@ -104,9 +115,10 @@ public Action Listener_Pause(int client, const char[] command, int argc)
 		return Plugin_Handled;
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "%s\x01 the game.", g_bPaused ? "Unpaused" : "Paused");
-	LogAction(client, -1, "%s the game.", g_bPaused ? "Unpaused" : "Paused");
-	g_bPaused = !g_bPaused;
+	ShowActivity2(client, "\x01[SM] \x04", "%s\x01 the game.", bPaused ? "Unpaused" : "Paused");
+	LogAction(client, -1, "\"%L\" %s the game.", client, bPaused ? "unpaused" : "paused");
+	bPaused = !bPaused;
+
 	return Plugin_Continue;
 }
 
@@ -198,6 +210,7 @@ public void Event_WeaponFire(Handle hEvent, char[] name, bool dontBroadcast)
 						}
 					}
 				}
+
 				SetEntProp(weapon, Prop_Send, "m_iClip1", GetEntProp(weapon, Prop_Send, "m_iClip1", 4, 0) + toAdd, 4, 0);
 			}
 		}
@@ -215,22 +228,16 @@ public Action Command_Health(int client, int argc)
 	}
 
 	char arg[65];
-	GetCmdArg(1, arg, sizeof(arg));
-
-	int amount = 0;
 	char arg2[20];
-	GetCmdArg(2, arg2, sizeof(arg2));
-
-	if(StringToIntEx(arg2, amount) == 0 || amount <= 0)
-	{
-		ReplyToCommand(client, "[SM] Invalid Value");
-		return Plugin_Handled;
-	}
-
 	char target_name[MAX_TARGET_LENGTH];
 	int target_list[MAXPLAYERS];
 	int target_count;
 	bool tn_is_ml;
+
+	GetCmdArg(1, arg, sizeof(arg));
+	GetCmdArg(2, arg2, sizeof(arg2));
+
+	int amount = clamp(StringToInt(arg2), 1, 0x7FFFFFFF);
 
 	if((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_ALIVE, target_name, sizeof(target_name), tn_is_ml)) <= 0)
 	{
@@ -244,6 +251,7 @@ public Action Command_Health(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Set health to \x04%d\x01 on target \x04%s", amount, target_name);
+	LogAction(client, -1, "\"%L\" set health to \"%d\" on target \"%s\"", client, amount, target_name);
 
 	return Plugin_Handled;
 }
@@ -257,22 +265,16 @@ public Action Command_Armor(int client, int argc)
 	}
 
 	char arg[65];
-	GetCmdArg(1, arg, sizeof(arg));
-
-	int amount = 0;
 	char arg2[20];
-	GetCmdArg(2, arg2, sizeof(arg2));
-
-	if(StringToIntEx(arg2, amount) == 0 || amount < 0)
-	{
-		ReplyToCommand(client, "[SM] Invalid Value");
-		return Plugin_Handled;
-	}
-
 	char target_name[MAX_TARGET_LENGTH];
 	int target_list[MAXPLAYERS];
 	int target_count;
 	bool tn_is_ml;
+
+	GetCmdArg(1, arg, sizeof(arg));
+	GetCmdArg(2, arg2, sizeof(arg2));
+
+	int amount = clamp(StringToInt(arg2), 0, 0xFF);
 
 	if((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_ALIVE, target_name, sizeof(target_name), tn_is_ml)) <= 0)
 	{
@@ -286,7 +288,7 @@ public Action Command_Armor(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Set kevlar to \x04%d\x01 on target \x04%s", amount, target_name);
-	LogAction(client, -1, "Set kevlar to %d on target %s", amount, target_name);
+	LogAction(client, -1, "\"%L\" set kevlar to \"%d\" on target \"%s\"", client, amount, target_name);
 
 	return Plugin_Handled;
 }
@@ -318,15 +320,18 @@ public Action Command_Weapon(int client, int argc)
 	if(StrContains(weapon, "grenade", false) != -1 || StrContains(weapon, "flashbang", false) != -1 || strncmp(arg2, "item_", 5) == 0)
 		ammo = -1;
 
-	AdminId id = GetUserAdmin(client);
-	int superadmin = GetAdminFlag(id, Admin_Custom3);
-
-	if(!superadmin)
+	if(client >= 1)
 	{
-		if(StrEqual(weapon, "weapon_c4", false) || StrEqual(weapon, "weapon_smokegrenade", false) || StrEqual(weapon, "item_defuser", false))
+		AdminId id = GetUserAdmin(client);
+		int superadmin = GetAdminFlag(id, Admin_Custom3);
+
+		if(!superadmin)
 		{
-			ReplyToCommand(client, "[SM] This weapon is restricted!");
-			return Plugin_Handled;
+			if(StrEqual(weapon, "weapon_c4", false) || StrEqual(weapon, "weapon_smokegrenade", false) || StrEqual(weapon, "item_defuser", false))
+			{
+				ReplyToCommand(client, "[SM] This weapon is restricted!");
+				return Plugin_Handled;
+			}
 		}
 	}
 
@@ -418,7 +423,7 @@ public Action Command_Weapon(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Gave \x04%s\x01 to target \x04%s", weapon, target_name);
-	LogAction(client, -1, "Gave %s to target %s", weapon, target_name);
+	LogAction(client, -1, "\"%L\" gave \"%s\" to target \"%s\"", client, weapon, target_name);
 
 	return Plugin_Handled;
 }
@@ -459,8 +464,8 @@ public Action Command_Strip(int client, int argc)
 		}
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "\x01Stripped all weapons on target \x04%s", target_name);
-	LogAction(client, -1, "Stripped all weapons on target %s", target_name);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Stripped all weapons from target \x04%s", target_name);
+	LogAction(client, -1, "\"%L\" stripped all weapons from target \"%s\"", client, target_name);
 
 	return Plugin_Handled;
 }
@@ -512,7 +517,7 @@ public Action Command_BuyZone(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "%s\x01 permanent buyzone on target \x04%s", (value ? "Enabled" : "Disabled"), target_name);
-	LogAction(client, -1, "%s permanent buyzone on target %s", (value ? "Enabled" : "Disabled"), target_name);
+	LogAction(client, -1, "\"%L\" %s permanent buyzone on target \"%s\"", client, (value ? "enabled" : "disabled"), target_name);
 
 	return Plugin_Handled;
 }
@@ -570,7 +575,7 @@ public Action Command_InfAmmo(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "%s\x01 infinite ammo on target \x04%s", (value ? "Enabled" : "Disabled"), target_name);
-	LogAction(client, -1, "%s infinite ammo on target %s", (value ? "Enabled" : "Disabled"), target_name);
+	LogAction(client, -1, "\"%L\" %s infinite ammo on target \"%s\"", client, (value ? "enabled" : "disabled"), target_name);
 
 	if(g_bInfAmmoAll)
 	{
@@ -615,22 +620,16 @@ public Action Command_Speed(int client, int argc)
 	}
 
 	char arg[65];
-	GetCmdArg(1, arg, sizeof(arg));
-
-	float speed = 0.0;
 	char arg2[20];
-	GetCmdArg(2, arg2, sizeof(arg2));
-
-	if(StringToFloatEx(arg2, speed) == 0 || speed <= 0.0)
-	{
-		ReplyToCommand(client, "[SM] Invalid Value");
-		return Plugin_Handled;
-	}
-
 	char target_name[MAX_TARGET_LENGTH];
 	int target_list[MAXPLAYERS];
 	int target_count;
 	bool tn_is_ml;
+
+	GetCmdArg(1, arg, sizeof(arg));
+	GetCmdArg(2, arg2, sizeof(arg2));
+
+	float speed = clamp(StringToFloat(arg2), 0.0, 100.0);
 
 	if((target_count = ProcessTargetString(arg, client, target_list, MAXPLAYERS, COMMAND_FILTER_ALIVE, target_name, sizeof(target_name), tn_is_ml)) <= 0)
 	{
@@ -644,7 +643,7 @@ public Action Command_Speed(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Set speed to \x04%.2f\x01 on target \x04%s", speed, target_name);
-	LogAction(client, -1, "Set speed to %.2f on target %s", speed, target_name);
+	LogAction(client, -1, "\"%L\" set speed to \"%.2f\" on target \"%s\"", client, speed, target_name);
 
 	return Plugin_Handled;
 }
@@ -684,7 +683,7 @@ public Action Command_Respawn(int client, int argc)
 	if(bDidRespawn)
 	{
 		ShowActivity2(client, "\x01[SM] \x04", "\x01Respawned \x04%s", sTargetName);
-		LogAction(client, -1, "Respawned %s", sTargetName);
+		LogAction(client, -1, "\"%L\" respawned \"%s\"", client, sTargetName);
 	}
 
 	return Plugin_Handled;
@@ -698,7 +697,6 @@ public Action Command_Cash(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	int iCash;
 	char sArgs[64];
 	char sArgs2[32];
 	char sTargetName[MAX_TARGET_LENGTH];
@@ -709,7 +707,7 @@ public Action Command_Cash(int client, int argc)
 	GetCmdArg(1, sArgs, sizeof(sArgs));
 	GetCmdArg(2, sArgs2, sizeof(sArgs2));
 
-	iCash = StringToInt(sArgs2);
+	int iCash = clamp(StringToInt(sArgs2), 0, 0xFFFF);
 
 	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_ALIVE, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 	{
@@ -722,8 +720,8 @@ public Action Command_Cash(int client, int argc)
 		SetEntProp(iTargets[i], Prop_Send, "m_iAccount", iCash);
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "\x01Set \x04%s\x01's cash to \x04%i", sTargetName, StringToInt(sArgs2));
-	LogAction(client, -1, "Set %s's cash to %i", sTargetName, StringToInt(sArgs2));
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Set cash to \x04%d\x01 on target \x04%s", iCash, sTargetName);
+	LogAction(client, -1, "\"%L\" set cash to \"%d\" on target \"%s\"", client, iCash, sTargetName);
 
 	return Plugin_Handled;
 }
@@ -736,7 +734,6 @@ public Action Command_ModelScale(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	float fScale;
 	char sArgs[64];
 	char sArgs2[32];
 	char sTargetName[MAX_TARGET_LENGTH];
@@ -747,7 +744,7 @@ public Action Command_ModelScale(int client, int argc)
 	GetCmdArg(1, sArgs, sizeof(sArgs));
 	GetCmdArg(2, sArgs2, sizeof(sArgs2));
 
-	fScale = StringToFloat(sArgs2);
+	float fScale = clamp(StringToFloat(sArgs2), 0.0, 100.0);
 
 	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_ALIVE, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 	{
@@ -760,8 +757,8 @@ public Action Command_ModelScale(int client, int argc)
 		SetEntPropFloat(iTargets[i], Prop_Send, "m_flModelScale", fScale);
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "\x01Set \x04%s\x01's model scale to \x04%.2f", sTargetName, fScale);
-	LogAction(client, -1, "Set %s's model scale to %.2f", sTargetName, fScale);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Set model scale to \x04%.2f\x01 on target \x04%s", fScale, sTargetName);
+	LogAction(client, -1, "\"%L\" set model scale to \"%.2f\" on target \"%s\"", client, fScale, sTargetName);
 
 	return Plugin_Handled;
 }
@@ -808,8 +805,8 @@ public Action Command_SetModel(int client, int argc)
 		SetEntityModel(iTargets[i], sArgs2);
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "\x01Set \x04%s\x01's model to \x04%s", sTargetName, sArgs2);
-	LogAction(client, -1, "Set %s's model to %s", sTargetName, sArgs2);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Set model to \x04%s\x01 on target \x04%s", sArgs2, sTargetName);
+	LogAction(client, -1, "\"%L\" set model to \"%s\" on target \"%s\"", client, sArgs2, sTargetName);
 
 	return Plugin_Handled;
 }
@@ -915,4 +912,94 @@ public Action Command_ForceCVar(int client, int argc)
 	}
 
 	return Plugin_Handled;
+}
+
+public Action Command_SetClanTag(int client, int argc)
+{
+	if(argc < 2)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_setclantag <#userid|name> [text]");
+		return Plugin_Handled;
+	}
+
+	char sArg[64];
+	char sArg2[64];
+	char sTargetName[MAX_TARGET_LENGTH];
+	int iTargets[MAXPLAYERS];
+	int iTargetCount;
+	bool bIsML;
+
+	GetCmdArg(1, sArg, sizeof(sArg));
+	GetCmdArg(2, sArg2, sizeof(sArg2));
+
+	if((iTargetCount = ProcessTargetString(sArg, client, iTargets, MAXPLAYERS, COMMAND_FILTER_CONNECTED, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	{
+		ReplyToTargetError(client, iTargetCount);
+		return Plugin_Handled;
+	}
+
+	for(int i = 0; i < iTargetCount; i++)
+	{
+		if(!IsClientInGame(iTargets[i]))
+			continue;
+
+		CS_SetClientClanTag(iTargets[i], sArg2);
+	}
+
+	return Plugin_Handled;
+}
+
+public Action Command_FakeCommand(int client, int argc)
+{
+	if (argc < 2)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_fakecommand <#userid|name> [command] [args]");
+		return Plugin_Handled;
+	}
+
+	char sArg[64];
+	char sArg2[64];
+	char sArg3[64];
+	char sTargetName[MAX_TARGET_LENGTH];
+	int iTargets[MAXPLAYERS];
+	int iTargetCount;
+	bool bIsML;
+
+	GetCmdArg(1, sArg, sizeof(sArg));
+	GetCmdArg(2, sArg2, sizeof(sArg2));
+	GetCmdArg(3, sArg3, sizeof(sArg3));
+
+	if((iTargetCount = ProcessTargetString(sArg, client, iTargets, MAXPLAYERS, COMMAND_FILTER_CONNECTED, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	{
+		ReplyToTargetError(client, iTargetCount);
+		return Plugin_Handled;
+	}
+
+	bool bCanServerExecute = false;
+
+	for(int i = 0; i < sizeof(g_sServerCanExecuteCmds); i++)
+	{
+		if(strcmp(g_sServerCanExecuteCmds[i], sArg2) == 0)
+		{
+			bCanServerExecute = true;
+			break;
+		}
+	}
+
+	for(int i = 0; i < iTargetCount; i++)
+	{
+		if(bCanServerExecute)
+			ClientCommand(iTargets[i], "%s %s", sArg2, sArg3);
+		else
+			FakeClientCommand(iTargets[i], "%s %s", sArg2, sArg3);
+	}
+
+	return Plugin_Handled;
+}
+
+stock any clamp(any input, any min, any max)
+{
+	any retval = input < min ? min : input;
+
+	return retval > max ? max : retval;
 }

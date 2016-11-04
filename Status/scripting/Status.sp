@@ -1,11 +1,5 @@
 #pragma semicolon 1
-//====================================================================================================
-//
-// Name: Status Fixer.
-// Author: zaCade + BotoX
-// Description: Fixes the 'status' command.
-//
-//====================================================================================================
+
 #include <sourcemod>
 #include <sdktools>
 
@@ -19,21 +13,15 @@ ConVar g_Cvar_HostTags;
 Handle g_hPlayerList[MAXPLAYERS + 1] = {INVALID_HANDLE, ...};
 bool g_bDataAvailable = false;
 
-//----------------------------------------------------------------------------------------------------
-// Purpose:
-//----------------------------------------------------------------------------------------------------
 public Plugin myinfo =
 {
 	name         = "Status Fixer",
-	author       = "zaCade + BotoX",
+	author       = "zaCade + BotoX + Obus",
 	description  = "Fixes the 'status' command",
-	version      = "1.2",
-	url          = ""
+	version      = "1.3",
+	url          = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/Status/"
 };
 
-//----------------------------------------------------------------------------------------------------
-// Purpose:
-//----------------------------------------------------------------------------------------------------
 public void OnPluginStart()
 {
 	g_Cvar_HostIP   = FindConVar("hostip");
@@ -44,9 +32,6 @@ public void OnPluginStart()
 	AddCommandListener(Command_Status, "status");
 }
 
-//----------------------------------------------------------------------------------------------------
-// Purpose:
-//----------------------------------------------------------------------------------------------------
 public Action Command_Status(int client, const char[] command, int args)
 {
 	if(client)
@@ -89,7 +74,7 @@ public Action Command_Status(int client, const char[] command, int args)
 			}
 		}
 
-		static char sSendBuffer[1000];
+		static char sSendBuffer[989];
 		int iBufLength = 0;
 		Format(sSendBuffer, sizeof(sSendBuffer), "hostname: %s\n", sServerName);
 		Format(sSendBuffer, sizeof(sSendBuffer), "%stickrate: %d\n", sSendBuffer, RoundToZero(1.0 / GetTickInterval()));
@@ -97,10 +82,10 @@ public Action Command_Status(int client, const char[] command, int args)
 		Format(sSendBuffer, sizeof(sSendBuffer), "%smap     : %s at: %.0f x, %.0f y, %.0f z\n", sSendBuffer, sMapName, fPosition[0], fPosition[1], fPosition[2]);
 		Format(sSendBuffer, sizeof(sSendBuffer), "%stags    : %s\n", sSendBuffer, sServerTags);
 		Format(sSendBuffer, sizeof(sSendBuffer), "%s%edicts : %d/%d/%d (used/max/free)\n", sSendBuffer, GetEntityCount(), GetMaxEntities(), GetMaxEntities() - GetEntityCount());
-		Format(sSendBuffer, sizeof(sSendBuffer), "%splayers : %d humans | %d bots (%d/%d)\n", sSendBuffer, iRealClients, iFakeClients, iTotalClients, MaxClients);
+		Format(sSendBuffer, sizeof(sSendBuffer), "%splayers : %d %s | %d %s (%d/%d)\n", sSendBuffer, iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
 		Format(sSendBuffer, sizeof(sSendBuffer), "%s# %8s %40s %24s %12s %4s %4s %s %s", sSendBuffer, "userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr");
 
-		g_hPlayerList[client] = CreateArray(ByteCountToCells(1000));
+		g_hPlayerList[client] = CreateArray(ByteCountToCells(989));
 
 		PushArrayString(g_hPlayerList[client], sSendBuffer);
 		g_bDataAvailable = true;
@@ -152,12 +137,15 @@ public Action Command_Status(int client, const char[] command, int args)
 				Format(sFormatted, sizeof(sFormatted), "# %8s %40s %24s %12s %4s %4s %s %s\n", sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, sPlayerAddr);
 
 				int iFormattedLength = strlen(sFormatted);
-				if(iBufLength + iFormattedLength >= 1000)
+				if(iBufLength + iFormattedLength >= 989)
 				{
 					sSendBuffer[iBufLength - 1] = 0;
 					PushArrayString(g_hPlayerList[client], sSendBuffer);
 					sSendBuffer[0] = 0;
 					iBufLength = 0;
+
+					StrCat(sSendBuffer, sizeof(sSendBuffer), sFormatted);
+					iBufLength += iFormattedLength;
 				}
 				else
 				{
@@ -178,9 +166,6 @@ public Action Command_Status(int client, const char[] command, int args)
 	return Plugin_Continue;
 }
 
-//----------------------------------------------------------------------------------------------------
-// Purpose:
-//----------------------------------------------------------------------------------------------------
 public void OnGameFrame()
 {
 	if(!g_bDataAvailable)
@@ -199,7 +184,7 @@ public void OnGameFrame()
 			continue;
 		}
 
-		static char sBuffer[1000];
+		static char sBuffer[989];
 		GetArrayString(g_hPlayerList[client], 0, sBuffer, sizeof(sBuffer));
 		RemoveFromArray(g_hPlayerList[client], 0);
 
@@ -209,4 +194,9 @@ public void OnGameFrame()
 
 	if(!bGotData)
 		g_bDataAvailable = false;
+}
+
+stock bool Multiple(int num)
+{
+	return (!num || num > 1);
 }

@@ -20,7 +20,7 @@ public Plugin myinfo =
 	name = "Advanced Targeting",
 	author = "BotoX + Obus",
 	description = "Adds extra targeting methods",
-	version = "1.1",
+	version = "1.2",
 	url = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/AdvancedTargeting/"
 }
 
@@ -89,16 +89,19 @@ public Action Command_Admins(int client, int args)
 	if(strlen(aBuf))
 	{
 		aBuf[strlen(aBuf) - 2] = 0;
-		PrintToChat(client, "[SM] Admins currently online: %s", aBuf);
+		ReplyToCommand(client, "[SM] Admins currently online: %s", aBuf);
 	}
 	else
-		PrintToChat(client, "[SM] Admins currently online: none");
+		ReplyToCommand(client, "[SM] Admins currently online: none");
 
 	return Plugin_Handled;
 }
 
 public Action Command_Friends(int client, int args)
 {
+	if(!client)
+		return Plugin_Handled;
+
 	if(g_FriendsArray[client] == INVALID_HANDLE)
 	{
 		PrintToChat(client, "[SM] Could not read your friendslist, your profile must be set to public!");
