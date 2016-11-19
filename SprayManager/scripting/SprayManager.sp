@@ -5,9 +5,7 @@
 #include <cstrike>
 
 #undef REQUIRE_PLUGIN
-
 #include <adminmenu>
-
 #define REQUIRE_PLUGIN
 
 #pragma newdecls required
@@ -54,6 +52,7 @@ int g_iSprayBanTarget[MAXPLAYERS + 1];
 int g_iSprayUnbanTarget[MAXPLAYERS + 1];
 int g_iSprayTraceTarget[MAXPLAYERS + 1];
 int g_iBanTarget[MAXPLAYERS + 1];
+int g_iDecalEntity[MAXPLAYERS + 1];
 
 float ACTUAL_NULL_VECTOR[3];
 float g_fNextSprayTime[MAXPLAYERS + 1];
@@ -65,7 +64,7 @@ public Plugin myinfo =
 	name		= "Spray Manager",
 	description	= "A plugin to help manage player sprays.",
 	author		= "Obus",
-	version		= "1.2.3",
+	version		= "1.2.6",
 	url			= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
@@ -176,7 +175,7 @@ public Action CS_OnTerminateRound(float &fDelay, CSRoundEndReason &reason)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsValidClient(i))
+		if (!IsValidClient(i) || IsFakeClient(i))
 			continue;
 
 		if (!IsVectorZero(g_vecSprayOrigin[i]))
@@ -224,13 +223,12 @@ public void OnAdminMenuReady(Handle hAdminMenu)
 	if (hMenuObj == INVALID_TOPMENUOBJECT)
 		return;
 
-	AddToTopMenu(g_hTopMenu, "SprayManager_Spraybanlist", TopMenuObject_Item, Handler_SprayBanList, hMenuObj);
+	AddToTopMenu(g_hTopMenu, "SprayManager_Spraybanlist", TopMenuObject_Item, Handler_SprayBanList, hMenuObj, "", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Tracespray", TopMenuObject_Item, Handler_TraceSpray, hMenuObj, "sm_tracespray", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Spray", TopMenuObject_Item, Handler_Spray, hMenuObj, "sm_spray", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Sprayban", TopMenuObject_Item, Handler_SprayBan, hMenuObj, "sm_sprayban", ADMFLAG_GENERIC);
-	AddToTopMenu(g_hTopMenu, "SprayManager_Sprayunban", TopMenuObject_Item, Handler_SprayUnban, hMenuObj, "sm_sprayunban", ADMFLAG_GENERIC);
 	AddToTopMenu(g_hTopMenu, "SprayManager_Banspray", TopMenuObject_Item, Handler_BanSpray, hMenuObj, "sm_banspray", ADMFLAG_GENERIC);
-	AddToTopMenu(g_hTopMenu, "SprayManager_Unbanspray", TopMenuObject_Item, Handler_UnbanSpray, hMenuObj, "sm_unbanspray", ADMFLAG_GENERIC);
+	AddToTopMenu(g_hTopMenu, "SprayManager_Unban", TopMenuObject_Item, Handler_UnbanSpray, hMenuObj, "sm_unbanspray", ADMFLAG_GENERIC);
 }
 
 public void OnLibraryRemoved(const char[] sLibraryName)
@@ -302,14 +300,6 @@ public void Handler_SprayBan(Handle hMenu, TopMenuAction hAction, TopMenuObject 
 		Menu_SprayBan(iParam1);
 }
 
-public void Handler_SprayUnban(Handle hMenu, TopMenuAction hAction, TopMenuObject hObjID, int iParam1, char[] sBuffer, int iBufflen)
-{
-	if (hAction == TopMenuAction_DisplayOption)
-		Format(sBuffer, iBufflen, "%s", "Spray Unban a Client", iParam1);
-	else if (hAction == TopMenuAction_SelectOption)
-		Menu_SprayUnban(iParam1);
-}
-
 public void Handler_BanSpray(Handle hMenu, TopMenuAction hAction, TopMenuObject hObjID, int iParam1, char[] sBuffer, int iBufflen)
 {
 	if (hAction == TopMenuAction_DisplayOption)
@@ -321,9 +311,9 @@ public void Handler_BanSpray(Handle hMenu, TopMenuAction hAction, TopMenuObject 
 public void Handler_UnbanSpray(Handle hMenu, TopMenuAction hAction, TopMenuObject hObjID, int iParam1, char[] sBuffer, int iBufflen)
 {
 	if (hAction == TopMenuAction_DisplayOption)
-		Format(sBuffer, iBufflen, "%s", "Unban a Client's Spray", iParam1);
+		Format(sBuffer, iBufflen, "%s", "Unban a Client", iParam1);
 	else if (hAction == TopMenuAction_SelectOption)
-		Menu_UnbanSpray(iParam1);
+		Menu_Unban(iParam1);
 }
 
 void Menu_ListBans(int client)
@@ -339,7 +329,7 @@ void Menu_ListBans(int client)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsValidClient(i))
+		if (!IsValidClient(i) || IsFakeClient(i))
 			continue;
 
 		if (g_bSprayBanned[i] || g_bSprayHashBanned[i])
@@ -348,7 +338,7 @@ void Menu_ListBans(int client)
 			char sBuff[64];
 			int iUserID = GetClientUserId(i);
 
-			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
+			Format(sBuff, sizeof(sBuff), "%N (#%d)", i, iUserID);
 			Format(sUserID, sizeof(sUserID), "%d", iUserID);
 
 			ListMenu.AddItem(sUserID, sBuff);
@@ -367,7 +357,7 @@ int MenuHandler_Menu_ListBans(Menu hMenu, MenuAction action, int iParam1, int iP
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -389,7 +379,7 @@ int MenuHandler_Menu_ListBans(Menu hMenu, MenuAction action, int iParam1, int iP
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 			else
 			{
@@ -429,7 +419,7 @@ int MenuHandler_Menu_Trace(Menu hMenu, MenuAction action, int iParam1, int iPara
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -453,7 +443,7 @@ int MenuHandler_Menu_Trace(Menu hMenu, MenuAction action, int iParam1, int iPara
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 			else
 			{
@@ -481,7 +471,7 @@ int MenuHandler_Menu_Trace(Menu hMenu, MenuAction action, int iParam1, int iPara
 					case 4:
 					{
 						Menu TraceSpraySprayBan = new Menu(MenuHandler_Menu_Trace_SprayBan);
-						TraceSpraySprayBan.SetTitle("[SprayManager] Select a Spray Ban Length for %N (#%i)", target, GetClientUserId(target));
+						TraceSpraySprayBan.SetTitle("[SprayManager] Select a Spray Ban Length for %N (#%d)", target, GetClientUserId(target));
 						TraceSpraySprayBan.ExitBackButton = true;
 
 						TraceSpraySprayBan.AddItem("10", "10 Minutes");
@@ -499,16 +489,17 @@ int MenuHandler_Menu_Trace(Menu hMenu, MenuAction action, int iParam1, int iPara
 
 					case 5:
 					{
-						if (BanClientSpray(target))
-							PrintToChatAll("\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", iParam1, target);
-						else
-							PrintToChat(iParam1, "\x01\x04[SprayManager] %N\x01's spray is already blacklisted.", target);
+						if (BanClientSpray(target, iParam1))
+						{
+							ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Banned \x04%N\x01's spray", target);
+							LogAction(iParam1, target, "\"%L\" banned \"%L\"'s spray", iParam1, target);
+						}
 					}
 
 					case 6:
 					{
 						Menu TraceSprayBan = new Menu(MenuHandler_Menu_Trace_Ban);
-						TraceSprayBan.SetTitle("[SprayManager] Select a Ban Length for %N (#%i)", target, GetClientUserId(target));
+						TraceSprayBan.SetTitle("[SprayManager] Select a Ban Length for %N (#%d)", target, GetClientUserId(target));
 						TraceSprayBan.ExitBackButton = true;
 
 						TraceSprayBan.AddItem("10", "10 Minutes");
@@ -534,7 +525,7 @@ int MenuHandler_Menu_Trace_SprayBan(Menu hMenu, MenuAction action, int iParam1, 
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -552,7 +543,7 @@ int MenuHandler_Menu_Trace_SprayBan(Menu hMenu, MenuAction action, int iParam1, 
 				else
 				{
 					g_bInvokedThroughTopMenu[iParam1] = false;
-					CloseHandle(hMenu);
+					delete hMenu;
 				}
 			}
 		}
@@ -574,12 +565,15 @@ int MenuHandler_Menu_Trace_SprayBan(Menu hMenu, MenuAction action, int iParam1, 
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 			else
 			{
 				if (SprayBanClient(iParam1, target, StringToInt(sOption), "Inappropriate Spray"))
-					PrintToChatAll("\x01\x04[SprayManager] %N\x01 spray banned \x04%N\x01.", iParam1, target);
+				{
+					ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Spray banned \x04%N", target);
+					LogAction(iParam1, target, "\"%L\" spray banned \"%L\"", iParam1, target);
+				}
 
 				g_iSprayBanTarget[iParam1] = 0;
 				g_bInvokedThroughTopMenu[iParam1] = false;
@@ -593,7 +587,7 @@ int MenuHandler_Menu_Trace_Ban(Menu hMenu, MenuAction action, int iParam1, int i
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -611,7 +605,7 @@ int MenuHandler_Menu_Trace_Ban(Menu hMenu, MenuAction action, int iParam1, int i
 				else
 				{
 					g_bInvokedThroughTopMenu[iParam1] = false;
-					CloseHandle(hMenu);
+					delete hMenu;
 				}
 			}
 		}
@@ -633,11 +627,11 @@ int MenuHandler_Menu_Trace_Ban(Menu hMenu, MenuAction action, int iParam1, int i
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 			else
 			{
-				FakeClientCommandEx(iParam1, "sm_ban \"#%i\" \"%s\" \"Inappropriate spray\"", GetClientUserId(g_iBanTarget[iParam1]), sOption);
+				FakeClientCommandEx(iParam1, "sm_ban \"#%d\" \"%s\" \"Inappropriate spray\"", GetClientUserId(g_iBanTarget[iParam1]), sOption);
 				g_iBanTarget[iParam1] = 0;
 				g_bInvokedThroughTopMenu[iParam1] = false;
 			}
@@ -667,25 +661,25 @@ void Menu_Spray(int client)
 
 		if (g_bSprayBanned[i] && g_bSprayHashBanned[i])
 		{
-			Format(sBuff, sizeof(sBuff), "%N (#%i) [Spray & Hash Banned]", i, iUserID);
+			Format(sBuff, sizeof(sBuff), "%N (#%d) [Spray & Hash Banned]", i, iUserID);
 
 			SprayMenu.AddItem(sUserID, sBuff);
 		}
 		else if (g_bSprayBanned[i])
 		{
-			Format(sBuff, sizeof(sBuff), "%N (#%i) [Spray Banned]", i, iUserID);
+			Format(sBuff, sizeof(sBuff), "%N (#%d) [Spray Banned]", i, iUserID);
 
 			SprayMenu.AddItem(sUserID, sBuff);
 		}
 		else if (g_bSprayHashBanned[i])
 		{
-			Format(sBuff, sizeof(sBuff), "%N (#%i) [Hash Banned]", i, iUserID);
+			Format(sBuff, sizeof(sBuff), "%N (#%d) [Hash Banned]", i, iUserID);
 
 			SprayMenu.AddItem(sUserID, sBuff);
 		}
 		else
 		{
-			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
+			Format(sBuff, sizeof(sBuff), "%N (#%d)", i, iUserID);
 
 			SprayMenu.AddItem(sUserID, sBuff);
 		}
@@ -699,7 +693,7 @@ int MenuHandler_Menu_Spray(Menu hMenu, MenuAction action, int iParam1, int iPara
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -721,7 +715,7 @@ int MenuHandler_Menu_Spray(Menu hMenu, MenuAction action, int iParam1, int iPara
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 			else
 			{
@@ -741,29 +735,33 @@ void Menu_SprayBan(int client)
 	if (!IsValidClient(client))
 		return;
 
+	int iClientsToDisplay;
+
 	Menu SprayBanMenu = new Menu(MenuHandler_Menu_SprayBan);
 	SprayBanMenu.SetTitle("[SprayManager] Select a Client to Spray Ban:");
 	SprayBanMenu.ExitBackButton = true;
 
-	int iClientsToDisplay;
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i) && !g_bSprayBanned[i])
-		{
-			char sUserID[16];
-			char sBuff[64];
-			int iUserID = GetClientUserId(i);
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
 
-			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
-			Format(sUserID, sizeof(sUserID), "%d", iUserID);
+		if (g_bSprayBanned[i])
+			continue;
 
-			SprayBanMenu.AddItem(sUserID, sBuff);
-			iClientsToDisplay++;
-		}
+		char sUserID[16];
+		char sBuff[64];
+		int iUserID = GetClientUserId(i);
+
+		Format(sBuff, sizeof(sBuff), "%N (#%d)", i, iUserID);
+		Format(sUserID, sizeof(sUserID), "%d", iUserID);
+
+		SprayBanMenu.AddItem(sUserID, sBuff);
+		iClientsToDisplay++;
 	}
 
 	if (!iClientsToDisplay)
-		SprayBanMenu.AddItem("", "No Clients to Display.", ITEMDRAW_DISABLED);
+		SprayBanMenu.AddItem("", "No eligible Clients found.", ITEMDRAW_DISABLED);
 
 	SprayBanMenu.Display(client, MENU_TIME_FOREVER);
 }
@@ -773,7 +771,7 @@ int MenuHandler_Menu_SprayBan(Menu hMenu, MenuAction action, int iParam1, int iP
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -795,12 +793,12 @@ int MenuHandler_Menu_SprayBan(Menu hMenu, MenuAction action, int iParam1, int iP
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 			else
 			{
 				Menu SprayBanLengthMenu = new Menu(MenuHandler_Menu_SprayBan_Length);
-				SprayBanLengthMenu.SetTitle("[SprayManager] Choose a Spray Ban Length for %N (#%i)", target, GetClientUserId(target));
+				SprayBanLengthMenu.SetTitle("[SprayManager] Choose a Spray Ban Length for %N (#%d)", target, GetClientUserId(target));
 				SprayBanLengthMenu.ExitBackButton = true;
 
 				SprayBanLengthMenu.AddItem("10", "10 Minutes");
@@ -824,7 +822,7 @@ int MenuHandler_Menu_SprayBan_Length(Menu hMenu, MenuAction action, int iParam1,
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -850,82 +848,12 @@ int MenuHandler_Menu_SprayBan_Length(Menu hMenu, MenuAction action, int iParam1,
 			else
 			{
 				if (SprayBanClient(iParam1, target, StringToInt(sOption), "Inappropriate Spray"))
-					PrintToChatAll("\x01\x04[SprayManager] %N\x01 spray banned \x04%N\x01.", iParam1, target);
+				{
+					ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Spray banned \x04%N", target);
+					LogAction(iParam1, target, "\"%L\" spray banned \"%L\"", iParam1, target);
+				}
 
 				g_iSprayBanTarget[iParam1] = 0;
-			}
-		}
-	}
-}
-
-void Menu_SprayUnban(int client)
-{
-	if (!IsValidClient(client))
-		return;
-
-	int iBannedClients;
-
-	Menu SprayUnbanMenu = new Menu(MenuHandler_Menu_SprayUnban);
-	SprayUnbanMenu.SetTitle("[SprayManager] Select a Client to Unban:");
-	SprayUnbanMenu.ExitBackButton =  true;
-
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (!IsValidClient(i))
-			continue;
-
-		if (g_bSprayBanned[i] || g_bSprayHashBanned[i])
-		{
-			char sUserID[16];
-			char sBuff[64];
-			int iUserID = GetClientUserId(i);
-
-			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
-			Format(sUserID, sizeof(sUserID), "%d", iUserID);
-
-			SprayUnbanMenu.AddItem(sUserID, sBuff);
-			iBannedClients++;
-		}
-	}
-
-	if (!iBannedClients)
-		SprayUnbanMenu.AddItem("", "No Banned Clients.", ITEMDRAW_DISABLED);
-
-	SprayUnbanMenu.Display(client, MENU_TIME_FOREVER);
-}
-
-int MenuHandler_Menu_SprayUnban(Menu hMenu, MenuAction action, int iParam1, int iParam2)
-{
-	switch (action)
-	{
-		case MenuAction_End:
-			CloseHandle(hMenu);
-
-		case MenuAction_Cancel:
-		{
-			if (iParam2 == MenuCancel_ExitBack && g_hTopMenu != INVALID_HANDLE)
-				DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
-		}
-
-		case MenuAction_Select:
-		{
-			char sOption[32];
-			hMenu.GetItem(iParam2, sOption, sizeof(sOption));
-
-			int target = GetClientOfUserId(StringToInt(sOption));
-
-			if (!IsValidClient(target))
-			{
-				PrintToChat(iParam1, "\x01\x04[SprayManager]\x01 Target no longer available.");
-
-				g_iSprayUnbanTarget[iParam1] = 0;
-
-				Menu_SprayUnban(iParam1);
-			}
-			else
-			{
-				g_bInvokedThroughListMenu[iParam1] = false;
-				Menu_ListBans_Target(iParam1, target);
 			}
 		}
 	}
@@ -944,22 +872,25 @@ void Menu_BanSpray(int client)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i) && !g_bSprayHashBanned[i])
-		{
-			char sUserID[16];
-			char sBuff[64];
-			int iUserID = GetClientUserId(i);
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
 
-			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
-			Format(sUserID, sizeof(sUserID), "%d", iUserID);
+		if (g_bSprayHashBanned[i])
+			continue;
 
-			BanSprayMenu.AddItem(sUserID, sBuff);
-			iClientsToDisplay++;
-		}
+		char sUserID[16];
+		char sBuff[64];
+		int iUserID = GetClientUserId(i);
+
+		Format(sBuff, sizeof(sBuff), "%N (#%d)", i, iUserID);
+		Format(sUserID, sizeof(sUserID), "%d", iUserID);
+
+		BanSprayMenu.AddItem(sUserID, sBuff);
+		iClientsToDisplay++;
 	}
 
 	if (!iClientsToDisplay)
-		BanSprayMenu.AddItem("", "No Clients to Display.", ITEMDRAW_DISABLED);
+		BanSprayMenu.AddItem("", "No eligible Clients found.", ITEMDRAW_DISABLED);
 
 	BanSprayMenu.Display(client, MENU_TIME_FOREVER);
 }
@@ -969,7 +900,7 @@ int MenuHandler_Menu_BanSpray(Menu hMenu, MenuAction action, int iParam1, int iP
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -992,39 +923,44 @@ int MenuHandler_Menu_BanSpray(Menu hMenu, MenuAction action, int iParam1, int iP
 			}
 			else
 			{
-				if (BanClientSpray(target))
-					PrintToChatAll("\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", iParam1, target);
-				else
-					PrintToChat(iParam1, "\x01\x04[SprayManager] %N\x01's spray is already blacklisted.", target);
+				if (BanClientSpray(target, iParam1))
+				{
+					ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Banned \x04%N\x01's spray", target);
+					LogAction(iParam1, target, "\"%L\" banned \"%L\"'s spray", iParam1, target);
+				}
 			}
 		}
 	}
 }
 
-void Menu_UnbanSpray(int client)
+void Menu_Unban(int client)
 {
 	if (!IsValidClient(client))
 		return;
 
+	int iBannedClients;
+
 	Menu UnbanSprayMenu = new Menu(MenuHandler_Menu_UnbanSpray);
-	UnbanSprayMenu.SetTitle("[SprayManager] Select a Client to Unban their Spray:");
+	UnbanSprayMenu.SetTitle("[SprayManager] Select a Client for more information:");
 	UnbanSprayMenu.ExitBackButton =  true;
 
-	int iBannedClients;
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i) && g_bSprayHashBanned[i])
-		{
-			char sUserID[16];
-			char sBuff[64];
-			int iUserID = GetClientUserId(i);
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
 
-			Format(sBuff, sizeof(sBuff), "%N (#%i)", i, iUserID);
-			Format(sUserID, sizeof(sUserID), "%d", iUserID);
+		if (!g_bSprayHashBanned[i] && !g_bSprayBanned[i])
+			continue;
 
-			UnbanSprayMenu.AddItem(sUserID, sBuff);
-			iBannedClients++;
-		}
+		char sUserID[16];
+		char sBuff[64];
+		int iUserID = GetClientUserId(i);
+
+		Format(sBuff, sizeof(sBuff), "%N (#%d)", i, iUserID);
+		Format(sUserID, sizeof(sUserID), "%d", iUserID);
+
+		UnbanSprayMenu.AddItem(sUserID, sBuff);
+		iBannedClients++;
 	}
 
 	if (!iBannedClients)
@@ -1038,7 +974,7 @@ int MenuHandler_Menu_UnbanSpray(Menu hMenu, MenuAction action, int iParam1, int 
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -1057,14 +993,12 @@ int MenuHandler_Menu_UnbanSpray(Menu hMenu, MenuAction action, int iParam1, int 
 			{
 				PrintToChat(iParam1, "\x01\x04[SprayManager]\x01 Target no longer available.");
 
-				Menu_UnbanSpray(iParam1);
+				Menu_Unban(iParam1);
 			}
 			else
 			{
-				if (UnbanClientSpray(target))
-					PrintToChatAll("\x01\x04[SprayManager] %N\x01 unbanned \x04%N\x01's spray.", iParam1, target);
-				else
-					PrintToChat(iParam1, "\x01\x04[SprayManager] %N\x01's spray is not blacklisted.", target);
+				g_bInvokedThroughListMenu[iParam1] = false;
+				Menu_ListBans_Target(iParam1, target);
 			}
 		}
 	}
@@ -1073,7 +1007,7 @@ int MenuHandler_Menu_UnbanSpray(Menu hMenu, MenuAction action, int iParam1, int 
 void Menu_ListBans_Target(int client, int target)
 {
 	Menu ListTargetMenu = new Menu(MenuHandler_Menu_ListBans_Target);
-	ListTargetMenu.SetTitle("[SprayManager] Banned Client: %N (#%i)", target, GetClientUserId(target));
+	ListTargetMenu.SetTitle("[SprayManager] Banned Client: %N (#%d)", target, GetClientUserId(target));
 	ListTargetMenu.ExitBackButton = true;
 
 	char sBanType[32];
@@ -1107,7 +1041,7 @@ void Menu_ListBans_Target(int client, int target)
 	if (iBanExpiryDate)
 	{
 		FormatTime(sBanExpiryDate, sizeof(sBanExpiryDate), NULL_STRING, iBanExpiryDate);
-		Format(sBanDuration, sizeof(sBanDuration), "%i %s", iBanDuration, SingularOrMultiple(iBanDuration) ? "Minutes" : "Minute");
+		Format(sBanDuration, sizeof(sBanDuration), "%d %s", iBanDuration, SingularOrMultiple(iBanDuration) ? "Minutes" : "Minute");
 	}
 	else
 	{
@@ -1144,7 +1078,7 @@ int MenuHandler_Menu_ListBans_Target(Menu hMenu, MenuAction action, int iParam1,
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -1153,7 +1087,7 @@ int MenuHandler_Menu_ListBans_Target(Menu hMenu, MenuAction action, int iParam1,
 				if (g_bInvokedThroughListMenu[iParam1])
 					Menu_ListBans(iParam1);
 				else
-					Menu_SprayUnban(iParam1);
+					Menu_Unban(iParam1);
 			}
 		}
 
@@ -1170,6 +1104,23 @@ int MenuHandler_Menu_ListBans_Target(Menu hMenu, MenuAction action, int iParam1,
 			}
 			else
 			{
+				if (g_bSprayBanned[target] && g_bSprayHashBanned[target])
+				{
+					Menu MenuUnbanMode = new Menu(MenuHandler_Menu_UnbanMode);
+					MenuUnbanMode.SetTitle("[SprayManager] Unban %N?", target);
+					MenuUnbanMode.ExitBackButton = true;
+
+					MenuUnbanMode.AddItem("H", "Remove Hash Ban.");
+					MenuUnbanMode.AddItem("S", "Remove Spray Ban.");
+					MenuUnbanMode.AddItem("B", "Remove Both.");
+
+					g_iSprayUnbanTarget[iParam1] = target;
+
+					MenuUnbanMode.Display(iParam1, MENU_TIME_FOREVER);
+
+					return;
+				}
+
 				Menu MenuConfirmUnban = new Menu(MenuHandler_Menu_ConfirmUnban);
 				MenuConfirmUnban.SetTitle("[SprayManager] Unban %N?", target);
 				MenuConfirmUnban.ExitBackButton = true;
@@ -1185,12 +1136,12 @@ int MenuHandler_Menu_ListBans_Target(Menu hMenu, MenuAction action, int iParam1,
 	}
 }
 
-int MenuHandler_Menu_ConfirmUnban(Menu hMenu, MenuAction action, int iParam1, int iParam2)
+int MenuHandler_Menu_UnbanMode(Menu hMenu, MenuAction action, int iParam1, int iParam2)
 {
 	switch (action)
 	{
 		case MenuAction_End:
-			CloseHandle(hMenu);
+			delete hMenu;
 
 		case MenuAction_Cancel:
 		{
@@ -1201,7 +1152,7 @@ int MenuHandler_Menu_ConfirmUnban(Menu hMenu, MenuAction action, int iParam1, in
 				else if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
 			}
 		}
 
@@ -1221,7 +1172,78 @@ int MenuHandler_Menu_ConfirmUnban(Menu hMenu, MenuAction action, int iParam1, in
 				if (g_hTopMenu != INVALID_HANDLE)
 					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
 				else
-					CloseHandle(hMenu);
+					delete hMenu;
+			}
+			else
+			{
+				if (sOption[0] == 'H')
+				{
+					if (UnbanClientSpray(iParam1, target))
+					{
+						ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Unbanned \x04%N\x01's spray", target);
+						LogAction(iParam1, target, "\"%L\" unbanned \"%L\"'s spray", iParam1, target);
+					}
+				}
+				else if (sOption[0] == 'S')
+				{
+					if (SprayUnbanClient(target, iParam1))
+					{
+						ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Spray unbanned \x04%N", target);
+						LogAction(iParam1, target, "\"%L\" spray unbanned \"%L\"", iParam1, target);
+					}
+				}
+				else if (sOption[0] == 'B')
+				{
+					if (SprayUnbanClient(target, iParam1) && UnbanClientSpray(iParam1, target))
+					{
+						ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Spray unbanned \x04%N", target);
+						LogAction(iParam1, target, "\"%L\" spray unbanned \"%L\"", iParam1, target);
+					}
+				}
+
+				g_iSprayUnbanTarget[iParam1] = 0;
+			}
+		}
+	}
+}
+
+int MenuHandler_Menu_ConfirmUnban(Menu hMenu, MenuAction action, int iParam1, int iParam2)
+{
+	switch (action)
+	{
+		case MenuAction_End:
+			delete hMenu;
+
+		case MenuAction_Cancel:
+		{
+			if (iParam2 == MenuCancel_ExitBack)
+			{
+				if (IsValidClient(g_iSprayUnbanTarget[iParam1]))
+					Menu_ListBans_Target(iParam1, g_iSprayUnbanTarget[iParam1]);
+				else if (g_hTopMenu != INVALID_HANDLE)
+					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
+				else
+					delete hMenu;
+			}
+		}
+
+		case MenuAction_Select:
+		{
+			char sOption[2];
+			hMenu.GetItem(iParam2, sOption, sizeof(sOption));
+
+			int target = g_iSprayUnbanTarget[iParam1];
+
+			if (!IsValidClient(target))
+			{
+				PrintToChat(iParam1, "\x01\x04[SprayManager]\x01 Target no longer available.");
+
+				g_iSprayUnbanTarget[iParam1] = 0;
+
+				if (g_hTopMenu != INVALID_HANDLE)
+					DisplayTopMenu(g_hTopMenu, iParam1, TopMenuPosition_LastCategory);
+				else
+					delete hMenu;
 			}
 			else
 			{
@@ -1229,19 +1251,27 @@ int MenuHandler_Menu_ConfirmUnban(Menu hMenu, MenuAction action, int iParam1, in
 				{
 					if (g_bSprayHashBanned[target] && g_bSprayBanned[target])
 					{
-						PrintToChatAll("\x01\x04[SprayManager] %N\x01 spray unbanned \x04%N\x01.", iParam1, target);
-						SprayUnbanClient(target);
-						UnbanClientSpray(target);
+						if (SprayUnbanClient(target, iParam1) && UnbanClientSpray(iParam1, target))
+						{
+							ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Spray unbanned \x04%N", target);
+							LogAction(iParam1, target, "\"%L\" spray unbanned \"%L\"", iParam1, target);
+						}
 					}
 					else if (g_bSprayBanned[target])
 					{
-						PrintToChatAll("\x01\x04[SprayManager] %N\x01 spray unbanned \x04%N\x01.", iParam1, target);
-						SprayUnbanClient(target);
+						if (SprayUnbanClient(target, iParam1))
+						{
+							ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Spray unbanned \x04%N", target);
+							LogAction(iParam1, target, "\"%L\" spray unbanned \"%L\"", iParam1, target);
+						}
 					}
 					else if (g_bSprayHashBanned[target])
 					{
-						PrintToChatAll("\x01\x04[SprayManager] %N\x01 unbanned \x04%N\x01's spray.", iParam1, target);
-						UnbanClientSpray(target);
+						if (UnbanClientSpray(iParam1, target))
+						{
+							ShowActivity2(iParam1, "\x01\x04[SprayManager] ", "\x01Unbanned \x04%N\x01's spray", target);
+							LogAction(iParam1, target, "\"%L\" unbanned \"%L\"'s spray", iParam1, target);
+						}
 					}
 
 					g_iSprayUnbanTarget[iParam1] = 0;
@@ -1291,9 +1321,6 @@ public Action Command_AdminSpray(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	float vecEndPos[3];
-	TracePlayerAngles(client, vecEndPos);
-
 	g_bAllowSpray = true;
 	ForceSpray(client, client, false);
 
@@ -1324,8 +1351,11 @@ public Action Command_SprayBan(int client, int argc)
 	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
-	if (SprayBanClient(client, iTarget, StringToInt(sLength), sReason))
-		PrintToChatAll("\x01\x04[SprayManager] %N\x01 spray banned \x04%N\x01.", client, iTarget);
+	if (!SprayBanClient(client, iTarget, StringToInt(sLength), sReason))
+		return Plugin_Handled;
+
+	ShowActivity2(client, "\x01\x04[SprayManager] ", "\x01Spray banned \x04%N", iTarget);
+	LogAction(client, iTarget, "\"%L\" spray banned \"%L\"", client, iTarget);
 
 	return Plugin_Handled;
 }
@@ -1346,13 +1376,11 @@ public Action Command_SprayUnban(int client, int argc)
 	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
-	if (!SprayUnbanClient(iTarget))
-	{
-		ReplyToCommand(client, "[SprayManager] %N is not spray banned.", iTarget);
+	if (!SprayUnbanClient(iTarget, client))
 		return Plugin_Handled;
-	}
 
-	PrintToChatAll("\x01\x04[SprayManager] %N\x01 spray unbanned \x04%N\x01.", client, iTarget);
+	ShowActivity2(client, "\x01\x04[SprayManager] ", "\x01Spray unbanned \x04%N", iTarget);
+	LogAction(client, iTarget, "\"%L\" spray unbanned \"%L\"", client, iTarget);
 
 	return Plugin_Handled;
 }
@@ -1369,17 +1397,15 @@ public Action Command_BanSpray(int client, int argc)
 		if ((iTarget = FindTarget(client, sTarget)) <= 0)
 			return Plugin_Handled;
 
-		if (!BanClientSpray(iTarget))
-		{
-			ReplyToCommand(client, "[SprayManager] %N's spray is already blacklisted.", iTarget);
+		if (!BanClientSpray(client, iTarget))
 			return Plugin_Handled;
-		}
 
-		PrintToChatAll("\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", client, iTarget);
-		
+		ShowActivity2(client, "\x01\x04[SprayManager] ", "\x01Banned \x04%N\x01's spray", iTarget);
+		LogAction(client, iTarget, "\"%L\" banned \"%L\"'s spray", client, iTarget);
+
 		return Plugin_Handled;
 	}
-	
+
 	float vecEndPos[3];
 
 	if (TracePlayerAngles(client, vecEndPos))
@@ -1389,13 +1415,11 @@ public Action Command_BanSpray(int client, int argc)
 			if (!IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
 				continue;
 
-			if (!BanClientSpray(i))
-			{
-				ReplyToCommand(client, "[SprayManager] %N's spray is already blacklisted.", i);
+			if (!BanClientSpray(client, i))
 				return Plugin_Handled;
-			}
 
-			PrintToChat(client, "\x01\x04[SprayManager] %N\x01 banned \x04%N\x01's spray.", client, i);
+			ShowActivity2(client, "\x01\x04[SprayManager] ", "\x01Banned \x04%N\x01's spray", i);
+			LogAction(client, i, "\"%L\" banned \"%L\"'s spray", client, i);
 
 			return Plugin_Handled;
 		}
@@ -1422,13 +1446,11 @@ public Action Command_UnbanSpray(int client, int argc)
 	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
 
-	if (!UnbanClientSpray(iTarget))
-	{
-		ReplyToCommand(client, "[SprayManager] %N's spray is not blacklisted.", iTarget);
+	if (!UnbanClientSpray(client, iTarget))
 		return Plugin_Handled;
-	}
 
-	PrintToChatAll("\x01\x04[SprayManager] %N\x01 unbanned \x04%N\x01's spray.", client, iTarget);
+	ShowActivity2(client, "\x01\x04[SprayManager] ", "\x01Unbanned \x04%N\x01's spray", iTarget);
+	LogAction(client, iTarget, "\"%L\" unbanned \"%L\"'s spray", client, iTarget);
 
 	return Plugin_Handled;
 }
@@ -1446,13 +1468,13 @@ public Action Command_TraceSpray(int client, int argc)
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
-			{
-				g_bInvokedThroughTopMenu[client] = false;
-				Menu_Trace(client, i);
+			if (!IsPointInsideAABB(vecEndPos, g_SprayAABB[i]))
+				continue;
 
-				return Plugin_Handled;
-			}
+			g_bInvokedThroughTopMenu[client] = false;
+			Menu_Trace(client, i);
+
+			return Plugin_Handled;
 		}
 	}
 
@@ -1523,11 +1545,11 @@ public Action Command_SprayManager_UpdateInfo(int client, int argc)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i))
-		{
-			UpdatePlayerInfo(i);
-			UpdateSprayHashInfo(i);
-		}
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
+
+		UpdatePlayerInfo(i);
+		UpdateSprayHashInfo(i);
 	}
 
 	ReplyToCommand(client, "[SprayManager] Refreshed database.");
@@ -1538,7 +1560,7 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 	int client = TE_ReadNum("m_nPlayer");
 
 	if (!IsValidClient(client))
-		return Plugin_Continue;
+		return Plugin_Handled;
 
 	float vecOrigin[3];
 	float AABBTemp[AABBTotalPoints];
@@ -1580,6 +1602,9 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 		if (g_fNextSprayTime[client] > GetGameTime())
 			return Plugin_Handled;
 
+		char sSteamID[32];
+		GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID));
+
 		if (!CheckCommandAccess(client, "sm_sprayban", ADMFLAG_GENERIC))
 		{
 			if (g_cvarUseProximityCheck.IntValue >= 1)
@@ -1590,6 +1615,9 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 						continue;
 
 					if (IsVectorZero(g_vecSprayOrigin[i]))
+						continue;
+
+					if (!IsPointInsideAABB(vecOrigin, g_SprayAABB[i]))
 						continue;
 
 					if (!CheckForAABBCollision(AABBTemp, g_SprayAABB[i]))
@@ -1615,16 +1643,9 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 
 	g_iSprayLifetime[client] = 0;
 
-	g_vecSprayOrigin[client][0] = vecOrigin[0];
-	g_vecSprayOrigin[client][1] = vecOrigin[1];
-	g_vecSprayOrigin[client][2] = vecOrigin[2];
+	g_vecSprayOrigin[client] = vecOrigin;
 
-	g_SprayAABB[client][AABBMinX] = AABBTemp[AABBMinX];
-	g_SprayAABB[client][AABBMaxX] = AABBTemp[AABBMaxX];
-	g_SprayAABB[client][AABBMinY] = AABBTemp[AABBMinY];
-	g_SprayAABB[client][AABBMaxY] = AABBTemp[AABBMaxY];
-	g_SprayAABB[client][AABBMinZ] = AABBTemp[AABBMinZ];
-	g_SprayAABB[client][AABBMaxZ] = AABBTemp[AABBMaxZ];
+	g_SprayAABB[client] = AABBTemp;
 
 	ArrayList PosArray = new ArrayList(3, 0);
 
@@ -1932,7 +1953,7 @@ bool SprayBanClient(int client, int target, int iBanLength, const char[] sReason
 	SQL_EscapeString(g_hDatabase, sTargetName, sSafeTargetName, 2 * strlen(sTargetName) + 1);
 	SQL_EscapeString(g_hDatabase, sReason, sSafeReason, 2 * strlen(sReason) + 1);
 
-	Format(sQuery, sizeof(sQuery), "INSERT INTO `spraymanager` (`steamid`, `name`, `unbantime`, `issuersteamid`, `issuername`, `issuedtime`, `issuedreason`) VALUES ('%s', '%s', '%i', '%s', '%s', '%i', '%s');",
+	Format(sQuery, sizeof(sQuery), "INSERT INTO `spraymanager` (`steamid`, `name`, `unbantime`, `issuersteamid`, `issuername`, `issuedtime`, `issuedreason`) VALUES ('%s', '%s', '%d', '%s', '%s', '%d', '%s');",
 		sTargetSteamID, sSafeTargetName, iBanLength ? (GetTime() + (iBanLength * 60)) : 0, sAdminSteamID, sSafeAdminName, GetTime(), strlen(sSafeReason) > 1 ? sSafeReason : "none");
 
 	SQL_TQuery(g_hDatabase, DummyCallback, sQuery);
@@ -1951,88 +1972,121 @@ bool SprayBanClient(int client, int target, int iBanLength, const char[] sReason
 	return true;
 }
 
-bool SprayUnbanClient(int client)
+bool SprayUnbanClient(int target, int client=-1)
 {
-	if (!IsValidClient(client))
+	if (!IsValidClient(target))
+	{
+		if (client != -1)
+			ReplyToCommand(client, "[SprayManager] Target is no longer valid.");
+
 		return false;
+	}
 
 	if (g_hDatabase == null || !g_bFullyConnected)
-		return false;
+	{
+		if (client != -1)
+			ReplyToCommand(client, "[SprayManager] Database is not connected.");
 
-	if (!g_bSprayBanned[client])
 		return false;
+	}
+
+	if (!g_bSprayBanned[target])
+	{
+		if (client != -1)
+			ReplyToCommand(client, "[SprayManager] %N is not spray banned.", target);
+
+		return false;
+	}
 
 	char sQuery[128];
 	char sClientSteamID[32];
 
-	GetClientAuthId(client, AuthId_Steam2, sClientSteamID, sizeof(sClientSteamID));
+	GetClientAuthId(target, AuthId_Steam2, sClientSteamID, sizeof(sClientSteamID));
 	Format(sQuery, sizeof(sQuery), "DELETE FROM `spraymanager` WHERE steamid = '%s';", sClientSteamID);
 
 	SQL_TQuery(g_hDatabase, DummyCallback, sQuery);
 
-	strcopy(g_sBanIssuer[client], sizeof(g_sBanIssuer[]), "");
-	strcopy(g_sBanIssuerSID[client], sizeof(g_sBanIssuerSID[]), "");
-	strcopy(g_sBanReason[client], sizeof(g_sBanReason[]), "");
-	g_bSprayBanned[client] = false;
-	g_iSprayLifetime[client] = 0;
-	g_iSprayBanTimestamp[client] = 0;
-	g_iSprayUnbanTimestamp[client] = -1;
-	g_fNextSprayTime[client] = 0.0;
+	strcopy(g_sBanIssuer[target], sizeof(g_sBanIssuer[]), "");
+	strcopy(g_sBanIssuerSID[target], sizeof(g_sBanIssuerSID[]), "");
+	strcopy(g_sBanReason[target], sizeof(g_sBanReason[]), "");
+	g_bSprayBanned[target] = false;
+	g_iSprayLifetime[target] = 0;
+	g_iSprayBanTimestamp[target] = 0;
+	g_iSprayUnbanTimestamp[target] = -1;
+	g_fNextSprayTime[target] = 0.0;
 
 	return true;
 }
 
-bool BanClientSpray(int client)
+bool BanClientSpray(int client, int target)
 {
-	if (!IsValidClient(client))
+	if (!IsValidClient(target))
+	{
+		ReplyToCommand(client, "[SprayManager] Target is no longer valid.");
 		return false;
+	}
 
 	if (g_hDatabase == null || !g_bFullyConnected)
+	{
+		ReplyToCommand(client, "[SprayManager] Database is not connected.");
 		return false;
+	}
 
-	if (g_bSprayHashBanned[client])
+	if (g_bSprayHashBanned[target])
+	{
+		ReplyToCommand(client, "[SprayManager] %N is already hash banned.", target);
 		return false;
+	}
 
 	char sQuery[256];
 	char sTargetName[64];
 	char sTargetSteamID[32];
 
-	GetClientName(client, sTargetName, sizeof(sTargetName));
-	GetClientAuthId(client, AuthId_Steam2, sTargetSteamID, sizeof(sTargetSteamID));
+	GetClientName(target, sTargetName, sizeof(sTargetName));
+	GetClientAuthId(target, AuthId_Steam2, sTargetSteamID, sizeof(sTargetSteamID));
 
 	char[] sSafeTargetName = new char[2 * strlen(sTargetName) + 1];
 	SQL_EscapeString(g_hDatabase, sTargetName, sSafeTargetName, 2 * strlen(sTargetName) + 1);
 
 	Format(sQuery, sizeof(sQuery), "INSERT INTO `sprayblacklist` (`sprayhash`, `sprayer`, `sprayersteamid`) VALUES ('%s', '%s', '%s');",
-		g_sSprayHash[client], sSafeTargetName, sTargetSteamID);
+		g_sSprayHash[target], sSafeTargetName, sTargetSteamID);
 
 	SQL_TQuery(g_hDatabase, DummyCallback, sQuery);
 
-	g_bSprayHashBanned[client] = true;
+	g_bSprayHashBanned[target] = true;
 
 	g_bAllowSpray = true;
-	SprayClientDecal(client, 0, ACTUAL_NULL_VECTOR);
+	SprayClientDecal(target, 0, ACTUAL_NULL_VECTOR);
 
 	return true;
 }
 
-bool UnbanClientSpray(int client)
+bool UnbanClientSpray(int client, int target)
 {
-	if (!IsValidClient(client))
+	if (!IsValidClient(target))
+	{
+		ReplyToCommand(client, "[SprayManager] Target is no longer valid.");
 		return false;
+	}
 
 	if (g_hDatabase == null || !g_bFullyConnected)
+	{
+		ReplyToCommand(client, "[SprayManager] Database is not connected.");
 		return false;
+	}
 
-	if (!g_bSprayHashBanned[client])
+	if (!g_bSprayHashBanned[target])
+	{
+		ReplyToCommand(client, "[SprayManager] %N is not hash banned.", target);
 		return false;
+	}
 
 	char sQuery[128];
-	Format(sQuery, sizeof(sQuery), "DELETE FROM `sprayblacklist` WHERE `sprayhash` = '%s';", g_sSprayHash[client]);
+	Format(sQuery, sizeof(sQuery), "DELETE FROM `sprayblacklist` WHERE `sprayhash` = '%s';", g_sSprayHash[target]);
 
 	SQL_TQuery(g_hDatabase, DummyCallback, sQuery);
 
-	g_bSprayHashBanned[client] = false;
+	g_bSprayHashBanned[target] = false;
 
 	return true;
 }
@@ -2147,7 +2201,7 @@ bool ForceSpray(int client, int target, bool bPlaySound=true)
 
 	if (TracePlayerAngles(client, vecEndPos))
 	{
-		SprayClientDecal(target, 0, vecEndPos);
+		SprayClientDecal(target, g_iDecalEntity[client], vecEndPos);
 
 		if (bPlaySound)
 			EmitSoundToAll("player/sprayer.wav", SOUND_FROM_WORLD, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, _, _, _, vecEndPos);
@@ -2185,17 +2239,25 @@ bool TracePlayerAngles(int client, float vecResult[3])
 	GetClientEyeAngles(client, vecEyeAngles);
 	GetClientEyePosition(client, vecEyeOrigin);
 
-	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_SHOT_HULL, RayType_Infinite, TraceFilterEntities);
+	g_iDecalEntity[client] = 0;
+
+	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_SOLID_BRUSHONLY, RayType_Infinite, TraceEntityFilter_FilterPlayers);
 
 	if (TR_DidHit(hTraceRay))
 	{
 		TR_GetEndPosition(vecResult, hTraceRay);
-		CloseHandle(hTraceRay);
+
+		int iEntity;
+
+		if ((iEntity = TR_GetEntityIndex(hTraceRay)) >= 0)
+			g_iDecalEntity[client] = iEntity;
+
+		delete hTraceRay;
 
 		return true;
 	}
 
-	CloseHandle(hTraceRay);
+	delete hTraceRay;
 
 	return false;
 }
@@ -2218,16 +2280,18 @@ bool TracePlayerAnglesRanged(int client, float fMaxDistance)
 	vecEndPos[1] = vecEyeOrigin[1] + (vecDirection[1] * fMaxDistance);
 	vecEndPos[2] = vecEyeOrigin[2] + (vecDirection[2] * fMaxDistance);
 
-	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEndPos, MASK_SHOT_HULL, RayType_EndPoint, TraceFilterEntities);
+	g_iDecalEntity[client] = 0;
+
+	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEndPos, MASK_SOLID_BRUSHONLY, RayType_EndPoint, TraceEntityFilter_FilterPlayers);
 
 	if (TR_DidHit(hTraceRay))
 	{
-		CloseHandle(hTraceRay);
+		delete hTraceRay;
 
 		return true;
 	}
-	
-	CloseHandle(hTraceRay);
+
+	delete hTraceRay;
 
 	return false;
 }
@@ -2322,9 +2386,9 @@ stock bool SingularOrMultiple(int num)
 	return false;
 }
 
-stock bool TraceFilterEntities(int entity, int contentsMask)
+stock bool TraceEntityFilter_FilterPlayers(int entity, int contentsMask)
 {
-	return false;
+	return entity > MaxClients;
 }
 
 stock bool IsValidClient(int client)
