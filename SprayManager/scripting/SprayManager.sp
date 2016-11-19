@@ -1617,10 +1617,7 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 					if (IsVectorZero(g_vecSprayOrigin[i]))
 						continue;
 
-					if (!IsPointInsideAABB(vecOrigin, g_SprayAABB[i]))
-						continue;
-
-					if (!CheckForAABBCollision(AABBTemp, g_SprayAABB[i]))
+					if (!IsPointInsideAABB(vecOrigin, g_SprayAABB[i]) && !CheckForAABBCollision(AABBTemp, g_SprayAABB[i]))
 						continue;
 
 					if (CheckCommandAccess(i, "", ADMFLAG_CUSTOM1, true) || CheckCommandAccess(i, "sm_sprayban", ADMFLAG_GENERIC))
