@@ -9,19 +9,19 @@ public Plugin myinfo =
 {
 	name 		= "Teleport Commands",
 	author		= "Obus",
-	description	= "Adds commands to teleport players.",
-	version		= "1.1",
-	url			= "https://github.com/CSSZombieEscape/sm-plugins/blob/master/Teleport/"
+	description	= "Adds commands to teleport clients.",
+	version		= "1.2",
+	url		= "https://github.com/CSSZombieEscape/sm-plugins/blob/master/Teleport/"
 }
 
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 
-	RegAdminCmd("sm_bring", Command_Bring, ADMFLAG_GENERIC, "Brings a player to your position.");
-	RegAdminCmd("sm_goto", Command_Goto, ADMFLAG_GENERIC, "Teleports you to a player.");
-	RegAdminCmd("sm_send", Command_Send, ADMFLAG_GENERIC, "Sends a player to another player.");
-	RegAdminCmd("sm_tpaim", Command_TpAim, ADMFLAG_GENERIC, "Teleports a player to your crosshair.");
+	RegAdminCmd("sm_bring", Command_Bring, ADMFLAG_GENERIC, "Brings a client to your position.");
+	RegAdminCmd("sm_goto", Command_Goto, ADMFLAG_GENERIC, "Teleport to a client.");
+	RegAdminCmd("sm_send", Command_Send, ADMFLAG_GENERIC, "Send a client to another client.");
+	RegAdminCmd("sm_tpaim", Command_TpAim, ADMFLAG_GENERIC, "Teleport a client to your aimpoint.");
 }
 
 public Action Command_Bring(int client, int argc)
@@ -38,7 +38,6 @@ public Action Command_Bring(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	float vecClientPos[3];
 	char sArgs[64];
 	char sTargetName[MAX_TARGET_LENGTH];
 	int iTargets[MAXPLAYERS];
@@ -46,7 +45,6 @@ public Action Command_Bring(int client, int argc)
 	bool bIsML;
 
 	GetCmdArg(1, sArgs, sizeof(sArgs));
-	GetClientAbsOrigin(client, vecClientPos);
 
 	if ((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, COMMAND_FILTER_ALIVE, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 	{
@@ -54,13 +52,17 @@ public Action Command_Bring(int client, int argc)
 		return Plugin_Handled;
 	}
 
+	float vecClientPos[3];
+
+	GetClientAbsOrigin(client, vecClientPos);
+
 	for (int i = 0; i < iTargetCount; i++)
 	{
 		TeleportEntity(iTargets[i], vecClientPos, NULL_VECTOR, NULL_VECTOR);
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "\x01Brought \x04%s\x01.", sTargetName);
-	LogAction(client, -1, "Brought %s", sTargetName);
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Brought \x04%s\x01", sTargetName);
+	LogAction(client, -1, "\"%L\" brought \"%s\"", client, sTargetName);
 
 	return Plugin_Handled;
 }
@@ -84,7 +86,7 @@ public Action Command_Goto(int client, int argc)
 
 	GetCmdArg(1, sTarget, sizeof(sTarget));
 
-	if (!strcmp(sTarget, "@aim"))
+	if (strcmp(sTarget, "@aim") == 0)
 	{
 		if (argc > 1)
 		{
@@ -94,39 +96,41 @@ public Action Command_Goto(int client, int argc)
 
 			if (StringToInt(sOption) <= 0)
 			{
-				float vecEndPos[3];
+				float vecAimPoint[3];
 
-				if (!TracePlayerAngles(client, vecEndPos))
+				if (!TracePlayerAngles(client, vecAimPoint))
 				{
-					PrintToChat(client, "[SM] Couldn't perform trace to your crosshair.");
+					PrintToChat(client, "[SM] Couldn't perform trace to your aimpoint.");
 					return Plugin_Handled;
 				}
 
-				TeleportEntity(client, vecEndPos, NULL_VECTOR, NULL_VECTOR);
-				
-				ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported to their crosshair.");
-				LogAction(client, -1, "Teleported to their crosshair");
+				TeleportEntity(client, vecAimPoint, NULL_VECTOR, NULL_VECTOR);
+
+				ShowActivity3(client, "\x01[SM] \x04", "\x01Teleported to their aimpoint.");
+				ReplyToCommand(client, "[SM] Teleported you to your aimpoint.");
+				LogAction(client, -1, "\"%L\" teleported to their aimpoint", client);
 
 				return Plugin_Handled;
 			}
 		}
 
-		int AimTarget = GetClientAimTarget(client, true);
+		int iAimTarget = GetClientAimTarget(client, true);
 
-		if (AimTarget == -1)
+		if (iAimTarget == -1)
 		{
-			float vecEndPos[3];
+			float vecAimPoint[3];
 
-			if (!TracePlayerAngles(client, vecEndPos))
+			if (!TracePlayerAngles(client, vecAimPoint))
 			{
-				PrintToChat(client, "[SM] Couldn't perform trace to your crosshair.");
+				PrintToChat(client, "[SM] Couldn't perform trace to your aimpoint.");
 				return Plugin_Handled;
 			}
 
-			TeleportEntity(client, vecEndPos, NULL_VECTOR, NULL_VECTOR);
-			
-			ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported to their crosshair.");
-			LogAction(client, -1, "Teleported to their crosshair");
+			TeleportEntity(client, vecAimPoint, NULL_VECTOR, NULL_VECTOR);
+
+			ShowActivity3(client, "\x01[SM] \x04", "\x01Teleported to their aimpoint.");
+			ReplyToCommand(client, "[SM] Teleported you to your aimpoint.");
+			LogAction(client, -1, "\"%L\" teleported to their aimpoint", client);
 
 			return Plugin_Handled;
 		}
@@ -142,7 +146,7 @@ public Action Command_Goto(int client, int argc)
 	TeleportEntity(client, vecTargetPos, NULL_VECTOR, NULL_VECTOR);
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported to \x04%N\x01.", iTarget);
-	LogAction(client, iTarget, "Teleported to %N", iTarget);
+	LogAction(client, iTarget, "\"%L\" teleported to \"%L\"", client, iTarget);
 
 	return Plugin_Handled;
 }
@@ -155,7 +159,6 @@ public Action Command_Send(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	float vecTargetPos[3];
 	int iTarget;
 	char sArgs[32];
 	char sTarget[32];
@@ -173,35 +176,38 @@ public Action Command_Send(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	if (!strcmp(sTarget, "@aim"))
+	if (strcmp(sTarget, "@aim") == 0)
 	{
 		if (!client)
 		{
-			ReplyToCommand(client, "[SM] Cannot use @aim from server console.");
+			ReplyToCommand(client, "[SM] Cannot use \"sm_send @aim\" from server console.");
 			return Plugin_Handled;
 		}
 
-		float vecEndPos[3];
+		float vecAimPoint[3];
 
-		if (!TracePlayerAngles(client, vecEndPos))
+		if (!TracePlayerAngles(client, vecAimPoint))
 		{
-			PrintToChat(client, "[SM] Couldn't perform trace to your crosshair.");
+			PrintToChat(client, "[SM] Couldn't perform trace to your aimpoint.");
 			return Plugin_Handled;
 		}
 
 		for (int i = 0; i < iTargetCount; i++)
 		{
-			TeleportEntity(iTargets[i], vecEndPos, NULL_VECTOR, NULL_VECTOR);
+			TeleportEntity(iTargets[i], vecAimPoint, NULL_VECTOR, NULL_VECTOR);
 		}
 
-		ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to their crosshair.", sTargetName);
-		LogAction(client, -1, "Teleported %s to their crosshair", sTargetName);
+		ShowActivity3(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to their aimpoint.", sTargetName);
+		ReplyToCommand(client, "\x01[SM] Teleported \x04%s\x01 to your aimpoint.", sTargetName);
+		LogAction(client, -1, "\"%L\" teleported target \"%s\" to their aimpoint", client, sTargetName);
 
 		return Plugin_Handled;
 	}
 
 	if ((iTarget = FindTarget(client, sTarget)) <= 0)
 		return Plugin_Handled;
+
+	float vecTargetPos[3];
 
 	GetClientAbsOrigin(iTarget, vecTargetPos);
 
@@ -211,7 +217,7 @@ public Action Command_Send(int client, int argc)
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to \x04%N\x01.", sTargetName, iTarget);
-	LogAction(client, iTarget, "Teleported %s to %N", sTargetName, iTarget);
+	LogAction(client, iTarget, "\"%L\" teleported target \"%s\" to \"%L\"", client, sTargetName, iTarget);
 
 	return Plugin_Handled;
 }
@@ -224,7 +230,6 @@ public Action Command_TpAim(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	float vecEndPos[3];
 	char sArgs[32];
 	char sTargetName[MAX_TARGET_LENGTH];
 	int iTargets[MAXPLAYERS];
@@ -239,16 +244,19 @@ public Action Command_TpAim(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	TracePlayerAngles(client, vecEndPos);
+	float vecAimPoint[3];
+
+	TracePlayerAngles(client, vecAimPoint);
 
 	for (int i = 0; i < iTargetCount; i++)
 	{
-		TeleportEntity(iTargets[i], vecEndPos, NULL_VECTOR, NULL_VECTOR);
+		TeleportEntity(iTargets[i], vecAimPoint, NULL_VECTOR, NULL_VECTOR);
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to their crosshair.", sTargetName);
-	LogAction(client, -1, "Teleported %s to their crosshair", sTargetName);
-	
+	ShowActivity3(client, "\x01[SM] \x04", "\x01Teleported \x04%s\x01 to their aimpoint.", sTargetName);
+	ReplyToCommand(client, "\x01[SM] Teleported \x04%s\x01 to your aimpoint.", sTargetName);
+	LogAction(client, -1, "\"%L\" teleported \"%s\" to their aimpoint", client, sTargetName);
+
 	return Plugin_Handled;
 }
 
@@ -263,22 +271,44 @@ bool TracePlayerAngles(int client, float vecResult[3])
 	GetClientEyeAngles(client, vecEyeAngles);
 	GetClientEyePosition(client, vecEyeOrigin);
 
-	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_SHOT_HULL, RayType_Infinite, FilterPlayers);
+	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_SHOT_HULL, RayType_Infinite, TraceEntityFilter_FilterPlayers);
 
 	if (TR_DidHit(hTraceRay))
 	{
 		TR_GetEndPosition(vecResult, hTraceRay);
-		CloseHandle(hTraceRay);
+
+		delete hTraceRay;
 
 		return true;
 	}
 
-	CloseHandle(hTraceRay);
+	delete hTraceRay;
 
 	return false;
 }
 
-stock bool FilterPlayers(int entity, int contentsMask)
+stock bool TraceEntityFilter_FilterPlayers(int entity, int contentsMask)
 {
 	return entity > MaxClients;
+}
+
+stock void ShowActivity3(int client, const char[] tag, const char[] fmt, any ...)
+{
+	char sFinal[255];
+	char sFormatted[255];
+	char sActivitySource[MAX_NAME_LENGTH];
+
+	FormatActivitySource(client, client, sActivitySource, sizeof(sActivitySource));
+
+	VFormat(sFormatted, sizeof(sFormatted), fmt, 4);
+
+	Format(sFinal, sizeof(sFinal), "%s%s: %s", tag, sActivitySource, sFormatted);
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || IsFakeClient(i) || i == client)
+			continue;
+
+		PrintToChat(i, sFinal);
+	}
 }

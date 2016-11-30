@@ -28,7 +28,7 @@ public Plugin myinfo =
 	name 		= "Advanced Commands",
 	author 		= "BotoX + Obus",
 	description	= "Adds extra commands for admins.",
-	version 	= "1.8",
+	version 	= "1.9",
 	url 		= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
 
@@ -50,6 +50,8 @@ public void OnPluginStart()
 	RegAdminCmd("sm_modelscale", Command_ModelScale, ADMFLAG_GENERIC, "sm_modelscale <#userid|name> <scale>");
 	RegAdminCmd("sm_resize", Command_ModelScale, ADMFLAG_GENERIC, "sm_resize <#userid|name> <scale>");
 	RegAdminCmd("sm_setmodel", Command_SetModel, ADMFLAG_GENERIC, "sm_setmodel <#userid|name> <modelpath>");
+	RegAdminCmd("sm_setscore", Command_SetScore, ADMFLAG_GENERIC, "sm_setscore <#userid|name> <value>");
+	RegAdminCmd("sm_setteamscore", Command_SetTeamScore, ADMFLAG_GENERIC, "sm_setteamscore <team> <value>");
 	RegAdminCmd("sm_waila", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_getinfo", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_getmodel", Command_WAILA, ADMFLAG_GENERIC);
@@ -800,13 +802,90 @@ public Action Command_SetModel(int client, int argc)
 		PrecacheModel(sArgs2);
 	}
 
-	for (int i = 0; i < iTargetCount; i++)
+	for(int i = 0; i < iTargetCount; i++)
 	{
 		SetEntityModel(iTargets[i], sArgs2);
 	}
 
 	ShowActivity2(client, "\x01[SM] \x04", "\x01Set model to \x04%s\x01 on target \x04%s", sArgs2, sTargetName);
 	LogAction(client, -1, "\"%L\" set model to \"%s\" on target \"%s\"", client, sArgs2, sTargetName);
+
+	return Plugin_Handled;
+}
+
+public Action Command_SetScore(int client, int argc)
+{
+	if(argc < 2)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_setscore <#userid|name> <value>");
+		return Plugin_Handled;
+	}
+
+	char sArgs[32];
+	char sArgs2[32];
+	char sTargetName[MAX_TARGET_LENGTH];
+	int iTargets[MAXPLAYERS];
+	int iTargetCount;
+	bool bIsML;
+
+	GetCmdArg(1, sArgs, sizeof(sArgs));
+	GetCmdArg(2, sArgs2, sizeof(sArgs2));
+
+	int iVal = StringToInt(sArgs2);
+
+	if((iTargetCount = ProcessTargetString(sArgs, client, iTargets, MAXPLAYERS, 0, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	{
+		ReplyToTargetError(client, iTargetCount);
+		return Plugin_Handled;
+	}
+
+	for(int i = 0; i < iTargetCount; i++)
+	{
+		SetEntProp(iTargets[i], Prop_Data, "m_iFrags", iVal);
+	}
+
+	ShowActivity2(client, "\x01[SM] \x04", "\x01Set score to \x04%d\x01 on target \x04%s", iVal, sTargetName);
+	LogAction(client, -1, "\"%L\" set score to \"%d\" on target \"%s\"", client, iVal, sTargetName);
+
+	return Plugin_Handled;
+}
+
+public Action Command_SetTeamScore(int client, int argc)
+{
+	if(argc < 2)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_setteamscore <team> <value>");
+		return Plugin_Handled;
+	}
+
+	char sArgs[32];
+	char sArgs2[32];
+
+	GetCmdArg(1, sArgs, sizeof(sArgs));
+	GetCmdArg(2, sArgs2, sizeof(sArgs2));
+
+	int iVal = StringToInt(sArgs2);
+
+	if(strcmp(sArgs, "@ct", false) == 0 || strcmp(sArgs, "@cts", false) == 0)
+	{
+		SetTeamScore(CS_TEAM_CT, iVal);
+		CS_SetTeamScore(CS_TEAM_CT, iVal);
+
+		ShowActivity2(client, "\x01[SM] \x04", "\x01Set team-score to \x04%d\x01 on team \x04Counter-Terrorists", iVal);
+		LogAction(client, -1, "\"%L\" set team-score to \"%d\" on team \"Counter-Terrorists\"", client, iVal);
+	}
+	else if(strcmp(sArgs, "@t", false) == 0 || strcmp(sArgs, "@ts", false) == 0)
+	{
+		SetTeamScore(CS_TEAM_T, iVal);
+		CS_SetTeamScore(CS_TEAM_T, iVal);
+
+		ShowActivity2(client, "\x01[SM] \x04", "\x01Set team-score to \x04%d\x01 on team \x04Terrorists", iVal);
+		LogAction(client, -1, "\"%L\" set team-score to \"%d\" on team \"Terrorists\"", client, iVal);
+	}
+	else
+	{
+		ReplyToCommand(client, "[SM] Invalid team.");
+	}
 
 	return Plugin_Handled;
 }
@@ -825,7 +904,7 @@ public Action Command_WAILA(int client, int argc)
 	GetClientEyeAngles(client, vecEyeAngles);
 	GetClientEyePosition(client, vecEyeOrigin);
 
-	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_ALL, RayType_Infinite, TraceFilterCaller, client);
+	Handle hTraceRay = TR_TraceRayFilterEx(vecEyeOrigin, vecEyeAngles, MASK_ALL, RayType_Infinite, TraceEntityFilter_FilterCaller, client);
 
 	if(TR_DidHit(hTraceRay))
 	{
@@ -842,7 +921,7 @@ public Action Command_WAILA(int client, int argc)
 		{
 			PrintToChat(client, "[SM] Trace hit the world.");
 
-			CloseHandle(hTraceRay);
+			delete hTraceRay;
 
 			return Plugin_Handled;
 		}
@@ -856,19 +935,19 @@ public Action Command_WAILA(int client, int argc)
 
 		PrintToChat(client, "[SM] Trace hit something, check your console for more information.");
 
-		CloseHandle(hTraceRay);
+		delete hTraceRay;
 
 		return Plugin_Handled;
 	}
 
-	CloseHandle(hTraceRay);
+	delete hTraceRay;
 
 	PrintToChat(client, "[SM] Couldn't find anything under your crosshair.");
 
 	return Plugin_Handled;
 }
 
-stock bool TraceFilterCaller(int entity, int contentsMask, int client)
+stock bool TraceEntityFilter_FilterCaller(int entity, int contentsMask, int client)
 {
 	return entity != client;
 }
@@ -894,6 +973,7 @@ public Action Command_ForceCVar(int client, int argc)
 	GetCmdArg(3, sArg3, sizeof(sArg3));
 
 	ConVar cvar = FindConVar(sArg2);
+
 	if(cvar == null)
 	{
 		ReplyToCommand(client, "[SM] No such cvar.");
@@ -906,7 +986,7 @@ public Action Command_ForceCVar(int client, int argc)
 		return Plugin_Handled;
 	}
 
-	for (int i = 0; i < iTargetCount; i++)
+	for(int i = 0; i < iTargetCount; i++)
 	{
 		cvar.ReplicateToClient(iTargets[i], sArg3);
 	}
@@ -932,7 +1012,7 @@ public Action Command_SetClanTag(int client, int argc)
 	GetCmdArg(1, sArg, sizeof(sArg));
 	GetCmdArg(2, sArg2, sizeof(sArg2));
 
-	if((iTargetCount = ProcessTargetString(sArg, client, iTargets, MAXPLAYERS, COMMAND_FILTER_CONNECTED, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
+	if((iTargetCount = ProcessTargetString(sArg, client, iTargets, MAXPLAYERS, 0, sTargetName, sizeof(sTargetName), bIsML)) <= 0)
 	{
 		ReplyToTargetError(client, iTargetCount);
 		return Plugin_Handled;
@@ -940,9 +1020,6 @@ public Action Command_SetClanTag(int client, int argc)
 
 	for(int i = 0; i < iTargetCount; i++)
 	{
-		if(!IsClientInGame(iTargets[i]))
-			continue;
-
 		CS_SetClientClanTag(iTargets[i], sArg2);
 	}
 
