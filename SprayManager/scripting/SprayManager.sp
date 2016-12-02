@@ -268,12 +268,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
 
 			ForceSpray(client, client, false);
 			g_fNextSprayTime[client] = 0.0;
+
+			impulse = 0; //wow
+
+			return Plugin_Changed;
 		}
 	}
 
-	impulse = 0; //wow
-
-	return Plugin_Changed;
+	return Plugin_Continue;
 }
 
 public void OnAdminMenuReady(Handle hAdminMenu)
