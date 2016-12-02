@@ -28,7 +28,7 @@ public Plugin myinfo =
 	name 		= "Advanced Commands",
 	author 		= "BotoX + Obus",
 	description	= "Adds extra commands for admins.",
-	version 	= "1.9",
+	version 	= "2.0.0",
 	url 		= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
 
@@ -68,7 +68,11 @@ public void OnPluginStart()
 	AutoExecConfig(true, "plugin.extracommands");
 
 	if(g_CVar_sv_pausable)
+	{
 		AddCommandListener(Listener_Pause, "pause");
+		AddCommandListener(Listener_Pause, "setpause"); //doesn't work on win32 srcds?
+		AddCommandListener(Listener_Pause, "unpause"); //doesn't work on win32 srcds?
+	}
 }
 
 public void OnMapStart()
@@ -101,7 +105,7 @@ public Action Listener_Pause(int client, const char[] command, int argc)
 
 	if(!g_CVar_sv_pausable.BoolValue)
 	{
-		ReplyToCommand(client, "sv_pausable is set to 0!");
+		ReplyToCommand(client, "[SM] \"sv_pausable\" is set to 0!");
 		return Plugin_Handled;
 	}
 
@@ -113,13 +117,19 @@ public Action Listener_Pause(int client, const char[] command, int argc)
 
 	if(!IsClientAuthorized(client) || !GetAdminFlag(GetUserAdmin(client), Admin_Generic))
 	{
-		ReplyToCommand(client, "You do not have permission to pause the game.");
+		ReplyToCommand(client, "[SM] You do not have permission to pause/unpause the game.");
 		return Plugin_Handled;
 	}
 
-	ShowActivity2(client, "\x01[SM] \x04", "%s\x01 the game.", bPaused ? "Unpaused" : "Paused");
-	LogAction(client, -1, "\"%L\" %s the game.", client, bPaused ? "unpaused" : "paused");
-	bPaused = !bPaused;
+	if(strcmp(command, "setpause") == 0)
+		bPaused = true;
+	else if(strcmp(command, "unpause") == 0)
+		bPaused = false;
+	else
+		bPaused = !bPaused;
+
+	ShowActivity2(client, "\x01[SM] \x04", "%s\x01 the game.", bPaused ? "Paused" : "Unpaused");
+	LogAction(client, -1, "\"%L\" %s the game.", client, bPaused ? "Paused" : "Unpaused");
 
 	return Plugin_Continue;
 }
@@ -460,8 +470,11 @@ public Action Command_Strip(int client, int argc)
 
 			while ((w = GetPlayerWeaponSlot(target_list[i], j)) != -1)
 			{
-				if(IsValidEntity(w))
+				if(IsValidEntity(w) && IsValidEdict(w))
+				{
 					RemovePlayerItem(target_list[i], w);
+					AcceptEntityInput(w, "Kill");
+				}
 			}
 		}
 	}

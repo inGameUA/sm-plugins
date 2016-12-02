@@ -23,11 +23,16 @@ enum
 
 Handle g_hDatabase = null;
 Handle g_hTraceTimer = null;
+Handle g_hRoundEndTimer = null;
 Handle g_hTopMenu = null;
 ConVar g_cvarHookedDecalFrequency = null;
 ConVar g_cvarDecalFrequency = null;
 ConVar g_cvarUseProximityCheck = null;
+ConVar g_cvarSendSpraysToConnectingClients = null;
+ConVar g_cvarUsePersistentSprays = null;
+ConVar g_cvarMaxSprayLifetime = null;
 
+int g_iOldDecalFreqVal;
 int g_iAllowSpray;
 
 bool g_bLoadedLate;
@@ -35,6 +40,7 @@ bool g_bSQLite;
 bool g_bGotBans;
 bool g_bGotBlacklist;
 bool g_bFullyConnected;
+bool g_bSkipDecalHook;
 
 char g_sBanIssuer[MAXPLAYERS + 1][64];
 char g_sBanIssuerSID[MAXPLAYERS + 1][32];
@@ -46,6 +52,8 @@ bool g_bSprayHashBanned[MAXPLAYERS + 1];
 bool g_bInvokedThroughTopMenu[MAXPLAYERS + 1];
 bool g_bInvokedThroughListMenu[MAXPLAYERS + 1];
 
+int g_iClientToClientSprayLifetime[MAXPLAYERS + 1][MAXPLAYERS + 1];
+int g_iClientSprayLifetime[MAXPLAYERS + 1] = { 2, ... };
 int g_iSprayLifetime[MAXPLAYERS + 1];
 int g_iSprayBanTimestamp[MAXPLAYERS + 1];
 int g_iSprayUnbanTimestamp[MAXPLAYERS + 1] = { -1, ... };
@@ -65,7 +73,7 @@ public Plugin myinfo =
 	name		= "Spray Manager",
 	description	= "A plugin to help manage player sprays.",
 	author		= "Obus",
-	version		= "1.2.7",
+	version		= "2.0.0",
 	url			= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/SprayManager"
 }
 
@@ -100,32 +108,38 @@ public void OnPluginStart()
 	if (LibraryExists("adminmenu") && ((hTopMenu = GetAdminTopMenu()) != null))
 		OnAdminMenuReady(hTopMenu);
 
-	if (g_cvarHookedDecalFrequency != null)
-		delete g_cvarHookedDecalFrequency;
-
-	if (g_cvarDecalFrequency != null)
-		delete g_cvarDecalFrequency;
-
-	if (g_cvarUseProximityCheck != null)
-		delete g_cvarUseProximityCheck;
-
 	g_cvarHookedDecalFrequency = FindConVar("decalfrequency");
+	g_iOldDecalFreqVal = g_cvarHookedDecalFrequency.IntValue;
 	g_cvarHookedDecalFrequency.IntValue = 0;
 
-	g_cvarDecalFrequency = CreateConVar("sm_decalfrequency", "10", "Controls how often clients can spray", FCVAR_NOTIFY);
+	g_cvarDecalFrequency = CreateConVar("sm_decalfrequency", "10.0", "Controls how often clients can spray", FCVAR_NOTIFY);
 
-	HookConVarChange(g_cvarHookedDecalFrequency, CVarHook_DecalFrequency);
+	HookConVarChange(g_cvarHookedDecalFrequency, ConVarChanged_DecalFrequency);
 
-	g_cvarUseProximityCheck = CreateConVar("sm_spraymanager_blockoverspraying", "1", "Allows or disallows people to overspray other people.", FCVAR_NOTIFY);
+	g_cvarUseProximityCheck = CreateConVar("sm_spraymanager_blockoverspraying", "1", "Blocks people from overspraying each other", FCVAR_NOTIFY);
+
+	g_cvarSendSpraysToConnectingClients = CreateConVar("sm_spraymanager_sendspraystoconnectingclients", "1", "Try to send active sprays to connecting clients");
+
+	g_cvarUsePersistentSprays = CreateConVar("sm_spraymanager_persistentsprays", "1", "Re-spray sprays when their client-sided lifetime (in rounds) expires");
+
+	g_cvarMaxSprayLifetime = CreateConVar("sm_spraymanager_maxspraylifetime", "2", "If not using persistent sprays, remove sprays after their global lifetime (in rounds) exceeds this number");
 
 	AutoExecConfig(true, "plugin.spraymanager");
 
-	if (g_hDatabase != null)
-		delete g_hDatabase;
-
-	g_hTraceTimer = CreateTimer(0.25, PerformPlayerTraces, _, TIMER_REPEAT);
+	g_hTraceTimer = CreateTimer(0.25, Timer_PerformPlayerTraces, _, TIMER_REPEAT);
 
 	InitializeSQL();
+
+	if (g_bLoadedLate)
+	{
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsClientInGame(i) || IsFakeClient(i))
+				continue;
+
+			OnClientPutInServer(i);
+		}
+	}
 }
 
 public void OnPluginEnd()
@@ -135,11 +149,11 @@ public void OnPluginEnd()
 		if (!IsValidClient(i) || IsFakeClient(i))
 			continue;
 
-		if (g_vecSprayOrigin[i][0] == 0.0)
+		if (IsVectorZero(g_vecSprayOrigin[i]))
 			continue;
 
 		g_iAllowSpray = i;
-		SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
+		SprayClientDecalToAll(i, 0, ACTUAL_NULL_VECTOR);
 	}
 
 	RemoveTempEntHook("Player Decal", HookDecal);
@@ -152,7 +166,56 @@ public void OnPluginEnd()
 	}
 
 	if (g_hTraceTimer != null)
-		KillTimer(g_hTraceTimer);
+		delete g_hTraceTimer;
+
+	if (g_hRoundEndTimer != null)
+		delete g_hRoundEndTimer;
+
+	g_cvarHookedDecalFrequency.IntValue = g_iOldDecalFreqVal;
+}
+
+public void OnMapEnd()
+{
+	if (g_hRoundEndTimer != null)
+		delete g_hRoundEndTimer;
+}
+
+public void OnClientPutInServer(int client)
+{
+	if (QueryClientConVar(client, "r_spray_lifetime", CvarQueryFinished_SprayLifeTime) == QUERYCOOKIE_FAILED)
+		g_iClientSprayLifetime[client] = 2;
+
+	if (g_cvarSendSpraysToConnectingClients.BoolValue)
+	{
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsValidClient(i) || IsFakeClient(i))
+				continue;
+
+			if (IsVectorZero(g_vecSprayOrigin[i]))
+				continue;
+
+			g_bSkipDecalHook = true;
+			SprayClientDecalToOne(i, client, g_iDecalEntity[i], g_vecSprayOrigin[i]);
+			g_iClientToClientSprayLifetime[client][i] = 0;
+			g_bSkipDecalHook = false;
+		}
+	}
+}
+
+public void CvarQueryFinished_SprayLifeTime(QueryCookie cookie, int client, ConVarQueryResult res, const char[] sCvarName, const char[] sCvarVal)
+{
+	if (res != ConVarQuery_Okay)
+	{
+		g_iClientSprayLifetime[client] = 2;
+		return;
+	}
+
+	int iVal = StringToInt(sCvarVal);
+
+	iVal = iVal <= 0 ? 1 : iVal > 1000 ? 1000 : iVal;
+
+	g_iClientSprayLifetime[client] = iVal;
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -167,28 +230,27 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnClientDisconnect(int client)
 {
-	g_iAllowSpray = client;
-	SprayClientDecal(client, 0, ACTUAL_NULL_VECTOR);
+	if (IsValidClient(client))
+	{
+		g_iAllowSpray = client;
+		SprayClientDecalToAll(client, 0, ACTUAL_NULL_VECTOR);
+	}
+
 	ClearPlayerInfo(client);
 }
 
 public Action CS_OnTerminateRound(float &fDelay, CSRoundEndReason &reason)
 {
-	for (int i = 1; i <= MaxClients; i++)
+	if (g_cvarUsePersistentSprays.BoolValue)
 	{
-		if (!IsValidClient(i) || IsFakeClient(i))
-			continue;
+		g_hRoundEndTimer = CreateTimer(fDelay, Timer_ProcessPersistentSprays);
 
-		if (!IsVectorZero(g_vecSprayOrigin[i]))
-			g_iSprayLifetime[i]++;
-
-		if (g_iSprayLifetime[i] >= 2)
-		{
-			g_iAllowSpray = i;
-			SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
-			g_iSprayLifetime[i] = 0;
-		}
+		return Plugin_Continue;
 	}
+
+	g_hRoundEndTimer = CreateTimer(fDelay, Timer_ResetOldSprays);
+
+	return Plugin_Continue;
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
@@ -209,7 +271,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
 		}
 	}
 
-	return Plugin_Continue;
+	impulse = 0; //wow
+
+	return Plugin_Changed;
 }
 
 public void OnAdminMenuReady(Handle hAdminMenu)
@@ -234,7 +298,7 @@ public void OnAdminMenuReady(Handle hAdminMenu)
 
 public void OnLibraryRemoved(const char[] sLibraryName)
 {
-	if (StrEqual(sLibraryName, "adminmenu"))
+	if (strcmp(sLibraryName, "adminmenu") == 0)
 		delete g_hTopMenu;
 }
 
@@ -1511,7 +1575,7 @@ public Action Command_RemoveSpray(int client, int argc)
 		for (int i = 0; i < iTargetCount; i++)
 		{
 			g_iAllowSpray = iTargets[i];
-			SprayClientDecal(iTargets[i], 0, ACTUAL_NULL_VECTOR);
+			SprayClientDecalToAll(iTargets[i], 0, ACTUAL_NULL_VECTOR);
 		}
 
 		PrintToChat(client, "\x01\x04[SprayManager]\x01 Removed \x04%s\x01's spray(s).", sTargetName);
@@ -1529,7 +1593,7 @@ public Action Command_RemoveSpray(int client, int argc)
 				continue;
 
 			g_iAllowSpray = i;
-			SprayClientDecal(i, 0, ACTUAL_NULL_VECTOR);
+			SprayClientDecalToAll(i, 0, ACTUAL_NULL_VECTOR);
 
 			PrintToChat(client, "\x01\x04[SprayManager]\x01 Removed \x04%N\x01's spray.", i);
 
@@ -1549,6 +1613,7 @@ public Action Command_SprayManager_UpdateInfo(int client, int argc)
 		if (!IsValidClient(i) || IsFakeClient(i))
 			continue;
 
+		ClearPlayerInfo(i);
 		UpdatePlayerInfo(i);
 		UpdateSprayHashInfo(i);
 	}
@@ -1558,6 +1623,9 @@ public Action Command_SprayManager_UpdateInfo(int client, int argc)
 
 public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClients, float fSendDelay)
 {
+	if (g_bSkipDecalHook)
+		return Plugin_Continue;
+
 	int client = TE_ReadNum("m_nPlayer");
 
 	if (!IsValidClient(client))
@@ -1613,7 +1681,7 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 
 		if (!CheckCommandAccess(client, "sm_sprayban", ADMFLAG_GENERIC))
 		{
-			if (g_cvarUseProximityCheck.IntValue >= 1)
+			if (g_cvarUseProximityCheck.BoolValue)
 			{
 				for (int i = 1; i <= MaxClients; i++)
 				{
@@ -1646,6 +1714,8 @@ public Action HookDecal(const char[] sTEName, const int[] iClients, int iNumClie
 
 	g_iSprayLifetime[client] = 0;
 
+	UpdateClientToClientSprayLifeTime(client, 0);
+
 	g_vecSprayOrigin[client] = vecOrigin;
 
 	g_SprayAABB[client] = AABBTemp;
@@ -1671,13 +1741,13 @@ public void FrameAfterSpray(ArrayList Data)
 
 public Action HookSprayer(int iClients[MAXPLAYERS], int &iNumClients, char sSoundName[PLATFORM_MAX_PATH], int &iEntity, int &iChannel, float &flVolume, int &iLevel, int &iPitch, int &iFlags, char sSoundEntry[PLATFORM_MAX_PATH], int &seed)
 {
-	if (StrEqual(sSoundName, "player/sprayer.wav") && iEntity > 0)
+	if (strcmp(sSoundName, "player/sprayer.wav") == 0 && iEntity > 0)
 		return Plugin_Handled;
 
 	return Plugin_Continue;
 }
 
-public Action PerformPlayerTraces(Handle hTimer)
+public Action Timer_PerformPlayerTraces(Handle hTimer)
 {
 	static bool bLookingatSpray[MAXPLAYERS + 1];
 	static bool bOnce[MAXPLAYERS + 1];
@@ -1691,17 +1761,17 @@ public Action PerformPlayerTraces(Handle hTimer)
 		if (!TracePlayerAngles(i, vecPos))
 			continue;
 
-		for (int a = 1; a <= MaxClients; a++)
+		for (int x = 1; x <= MaxClients; x++)
 		{
-			if (!IsValidClient(a))
+			if (!IsValidClient(x))
 				continue;
 
-			if (IsPointInsideAABB(vecPos, g_SprayAABB[a]))
+			if (IsPointInsideAABB(vecPos, g_SprayAABB[x]))
 			{
 				char sSteamID[32];
-				GetClientAuthId(a, AuthId_Steam2, sSteamID, sizeof(sSteamID));
+				GetClientAuthId(x, AuthId_Steam2, sSteamID, sizeof(sSteamID));
 
-				PrintHintText(i, "Sprayed by: %N (%s)", a, sSteamID);
+				PrintHintText(i, "Sprayed by: %N (%s)", x, sSteamID);
 				StopSound(i, SNDCHAN_STATIC, "UI/hint.wav");
 
 				bLookingatSpray[i] = true;
@@ -1714,19 +1784,68 @@ public Action PerformPlayerTraces(Handle hTimer)
 		}
 	}
 
-	for (int x = 1; x <= MaxClients; x++)
+	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsValidClient(x) || IsFakeClient(x))
+		if (!IsValidClient(i) || IsFakeClient(i))
 			continue;
 
-		if (!bLookingatSpray[x] && !bOnce[x])
+		if (!bLookingatSpray[i] && !bOnce[i])
 		{
-			PrintHintText(x, "");
-			StopSound(x, SNDCHAN_STATIC, "UI/hint.wav");
+			PrintHintText(i, "");
+			StopSound(i, SNDCHAN_STATIC, "UI/hint.wav");
 
-			bOnce[x] = true;
+			bOnce[i] = true;
 		}
 	}
+}
+
+public Action Timer_ProcessPersistentSprays(Handle hThis)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
+
+		for (int x = 1; x <= MaxClients; x++)
+		{
+			if (!IsValidClient(x) || IsFakeClient(x))
+				continue;
+
+			if (!IsVectorZero(g_vecSprayOrigin[i]))
+				g_iClientToClientSprayLifetime[x][i]++;
+
+			if (g_iClientToClientSprayLifetime[x][i] >= g_iClientSprayLifetime[x])
+			{
+				g_bSkipDecalHook = true;
+				SprayClientDecalToOne(i, x, g_iDecalEntity[i], g_vecSprayOrigin[i]);
+				g_iClientToClientSprayLifetime[x][i] = 0;
+				g_bSkipDecalHook = false;
+			}
+		}
+	}
+
+	g_hRoundEndTimer = null;
+}
+
+public Action Timer_ResetOldSprays(Handle hThis)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsValidClient(i) || IsFakeClient(i))
+			continue;
+
+		if (!IsVectorZero(g_vecSprayOrigin[i]))
+			g_iSprayLifetime[i]++;
+
+		if (g_iSprayLifetime[i] >= g_cvarMaxSprayLifetime.IntValue)
+		{
+			g_iAllowSpray = i;
+			SprayClientDecalToAll(i, 0, ACTUAL_NULL_VECTOR);
+			g_iSprayLifetime[i] = 0;
+		}
+	}
+
+	g_hRoundEndTimer = null;
 }
 
 void InitializeSQL()
@@ -1901,7 +2020,7 @@ public Action RetryUpdatingPlayerInfo(Handle hTimer)
 	}
 }
 
-public void CVarHook_DecalFrequency(ConVar cvar, const char[] sOldValue, const char[] sNewValue)
+public void ConVarChanged_DecalFrequency(ConVar cvar, const char[] sOldValue, const char[] sNewValue)
 {
 	if (cvar == g_cvarHookedDecalFrequency)
 	{
@@ -1970,7 +2089,7 @@ bool SprayBanClient(int client, int target, int iBanLength, const char[] sReason
 	g_fNextSprayTime[target] = 0.0;
 
 	g_iAllowSpray = target;
-	SprayClientDecal(target, 0, ACTUAL_NULL_VECTOR);
+	SprayClientDecalToAll(target, 0, ACTUAL_NULL_VECTOR);
 
 	return true;
 }
@@ -2014,6 +2133,7 @@ bool SprayUnbanClient(int target, int client=-1)
 	strcopy(g_sBanReason[target], sizeof(g_sBanReason[]), "");
 	g_bSprayBanned[target] = false;
 	g_iSprayLifetime[target] = 0;
+	UpdateClientToClientSprayLifeTime(target, 0);
 	g_iSprayBanTimestamp[target] = 0;
 	g_iSprayUnbanTimestamp[target] = -1;
 	g_fNextSprayTime[target] = 0.0;
@@ -2059,7 +2179,7 @@ bool BanClientSpray(int client, int target)
 	g_bSprayHashBanned[target] = true;
 
 	g_iAllowSpray = target;
-	SprayClientDecal(target, 0, ACTUAL_NULL_VECTOR);
+	SprayClientDecalToAll(target, 0, ACTUAL_NULL_VECTOR);
 
 	return true;
 }
@@ -2204,7 +2324,7 @@ bool ForceSpray(int client, int target, bool bPlaySound=true)
 
 	if (TracePlayerAngles(client, vecEndPos))
 	{
-		SprayClientDecal(target, g_iDecalEntity[client], vecEndPos);
+		SprayClientDecalToAll(target, g_iDecalEntity[client], vecEndPos);
 
 		if (bPlaySound)
 			EmitSoundToAll("player/sprayer.wav", SOUND_FROM_WORLD, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, _, _, _, vecEndPos);
@@ -2217,7 +2337,7 @@ bool ForceSpray(int client, int target, bool bPlaySound=true)
 	return false;
 }
 
-bool SprayClientDecal(int client, int iEntity, float vecOrigin[3])
+bool SprayClientDecalToAll(int client, int iEntity, float vecOrigin[3])
 {
 	if (!IsValidClient(client))
 		return false;
@@ -2227,6 +2347,20 @@ bool SprayClientDecal(int client, int iEntity, float vecOrigin[3])
 	TE_WriteNum("m_nEntity", iEntity);
 	TE_WriteNum("m_nPlayer", client);
 	TE_SendToAll();
+
+	return true;
+}
+
+bool SprayClientDecalToOne(int client, int target, int iEntity, float vecOrigin[3])
+{
+	if (!IsValidClient(client))
+		return false;
+
+	TE_Start("Player Decal");
+	TE_WriteVector("m_vecOrigin", vecOrigin);
+	TE_WriteNum("m_nEntity", iEntity);
+	TE_WriteNum("m_nPlayer", client);
+	TE_SendToClient(target);
 
 	return true;
 }
@@ -2307,11 +2441,30 @@ void ClearPlayerInfo(int client)
 	strcopy(g_sSprayHash[client], sizeof(g_sSprayHash[]), "");
 	g_bSprayBanned[client] = false;
 	g_bSprayHashBanned[client] = false;
+	g_iClientSprayLifetime[client] = 2;
 	g_iSprayLifetime[client] = 0;
+	ResetClientToClientSprayLifeTime(client);
 	g_iSprayBanTimestamp[client] = 0;
 	g_iSprayUnbanTimestamp[client] = -1;
 	g_fNextSprayTime[client] = 0.0;
 	g_vecSprayOrigin[client] = ACTUAL_NULL_VECTOR;
+}
+
+void UpdateClientToClientSprayLifeTime(int client, int iLifeTime)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		g_iClientToClientSprayLifetime[i][client] = iLifeTime;
+	}
+}
+
+void ResetClientToClientSprayLifeTime(int client)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		g_iClientToClientSprayLifetime[i][client] = 0;
+		g_iClientToClientSprayLifetime[client][i] = 0;
+	}
 }
 
 void FormatRemainingTime(int iTimestamp, char[] sBuffer, int iBuffSize)
@@ -2373,12 +2526,12 @@ bool CheckForAABBCollision(float AABB1[6], float AABB2[6])
 	return true;
 }
 
-stock bool IsVectorZero(float vecPos[3])
+bool IsVectorZero(float vecPos[3])
 {
 	return ((vecPos[0] == 0.0) && (vecPos[1] == 0.0) && (vecPos[2] == 0.0));
 }
 
-stock bool SingularOrMultiple(int num)
+bool SingularOrMultiple(int num)
 {
 	if (!num || num > 1)
 		return true;
@@ -2386,12 +2539,12 @@ stock bool SingularOrMultiple(int num)
 	return false;
 }
 
-stock bool TraceEntityFilter_FilterPlayers(int entity, int contentsMask)
+bool TraceEntityFilter_FilterPlayers(int entity, int contentsMask)
 {
 	return entity > MaxClients;
 }
 
-stock bool IsValidClient(int client)
+bool IsValidClient(int client)
 {
 	if (client <= 0 || client > MaxClients || !IsClientInGame(client))
 		return false;
