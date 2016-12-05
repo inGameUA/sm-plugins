@@ -356,6 +356,9 @@ public void APIWebResponse(const char[] sData, int client)
 		return;
 	}
 
+	if(g_FriendsArray[client] != INVALID_HANDLE)
+		CloseHandle(g_FriendsArray[client]);
+
 	g_FriendsArray[client] = CreateArray();
 
 	char sCommunityID[32];

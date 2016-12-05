@@ -486,6 +486,14 @@ public Action Command_NominateList(int client, int args)
 
 public int Handler_NominateListMenu(Handle menu, MenuAction action, int param1, int param2)
 {
+	switch(action)
+	{
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+
 	return 0;
 }
 

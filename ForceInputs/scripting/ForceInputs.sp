@@ -122,7 +122,10 @@ public Action Command_ForceInput(int client, int args)
 			int entity = TR_GetEntityIndex(hTrace);
 
 			if(entity <= 1 || !IsValidEntity(entity))
+			{
+				CloseHandle(hTrace);
 				return Plugin_Handled;
+			}
 
 			if(sArguments[2][0])
 				SetVariantString(sArguments[2]);
@@ -130,6 +133,7 @@ public Action Command_ForceInput(int client, int args)
 			AcceptEntityInput(entity, sArguments[1], client, client);
 			ReplyToCommand(client, "[SM] Input successful.");
 		}
+		CloseHandle(hTrace);
 	}
 	else
 	{

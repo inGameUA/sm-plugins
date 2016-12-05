@@ -108,14 +108,15 @@ public EConnect OnClientPreConnectEx(const char[] sName, char sPassword[255], co
 
 public void AsyncHasSteamIDReservedSlotCallback(const char[] sSteam32ID, int Result, any Data)
 {
+	DataPack pack = view_as<DataPack>(Data);
 	// Slot free'd up while waiting or doesn't have a reserved slot?
 	if(GetClientCount(false) < MaxClients || Result <= 0)
 	{
+		delete pack;
 		ClientPreConnectEx(sSteam32ID, k_OnClientPreConnectEx_Accept, "");
 		return;
 	}
 
-	DataPack pack = view_as<DataPack>(Data);
 	pack.Reset();
 
 	AdminId admin = view_as<AdminId>(pack.ReadCell());
