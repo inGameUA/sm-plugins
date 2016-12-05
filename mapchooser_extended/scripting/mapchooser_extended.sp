@@ -2019,7 +2019,25 @@ public int Native_ExcludeMap(Handle plugin, int numParams)
 	char[] map = new char[len+1];
 	GetNativeString(1, map, len+1);
 
-	int Cooldown = InternalGetMapCooldown(map);
+	int Cooldown;
+	int Mode = GetNativeCell(3);
+
+	if(Mode == 0)
+	{
+		Cooldown = InternalGetMapCooldown(map);
+	}
+	else if(Mode == 1)
+	{
+		Cooldown = GetNativeCell(2);
+	}
+	else if(Mode == 2)
+	{
+		g_OldMapList.GetValue(map, Cooldown);
+		int NewCooldown = GetNativeCell(2);
+		if(NewCooldown > Cooldown)
+			Cooldown = NewCooldown;
+	}
+
 	g_OldMapList.SetValue(map, Cooldown, true);
 
 	return true;

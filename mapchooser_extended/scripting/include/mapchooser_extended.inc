@@ -94,7 +94,18 @@ native bool IsMapOfficial(const char[] map);
  */
 native CanNominateResult CanNominate();
 
-native bool ExcludeMap(const char[] map);
+/**
+ * Add map to nomination exclude list.
+ * Known as cooldown.
+ * 
+ * @param map 		Name of map
+ * @param cooldown 	Cooldown, interpretation depends on mode.
+ * @param mode 		0: Normal, use cooldown value from config/default.
+ *					1: Set or replace cooldown with cooldown value.
+ *					2: Set or replace cooldown with cooldown value if greater than current cooldown.
+ * @return 			true on success
+ */
+native bool ExcludeMap(const char[] map, int cooldown = 0, int mode = 0);
 
 native int GetMapCooldown(const char[] map);
 native int GetMapMinPlayers(const char[] map);

@@ -102,7 +102,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_nominate_addmap", Command_Addmap, ADMFLAG_CHANGEMAP, "sm_nominate_addmap <mapname> - Forces a map to be on the next mapvote.");
 	RegAdminCmd("sm_nominate_removemap", Command_Removemap, ADMFLAG_CHANGEMAP, "sm_nominate_removemap <mapname> - Removes a map from Nominations.");
 
-	RegAdminCmd("sm_nominate_exclude", Command_AddExclude, ADMFLAG_CHANGEMAP, "sm_nominate_exclude <mapname> - Forces a map to be inserted into the recently played maps. Effectively blocking the map from being nominated.");
+	RegAdminCmd("sm_nominate_exclude", Command_AddExclude, ADMFLAG_CHANGEMAP, "sm_nominate_exclude <mapname> [cooldown] - Forces a map to be inserted into the recently played maps. Effectively blocking the map from being nominated.");
 
 	// Nominations Extended cvars
 	CreateConVar("ne_version", MCE_VERSION, "Nominations Extended Version", FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD);
@@ -296,6 +296,21 @@ public Action Command_AddExclude(int client, int args)
 	static char mapname[PLATFORM_MAX_PATH];
 	GetCmdArg(1, mapname, sizeof(mapname));
 
+	int cooldown = 0;
+	int mode = 0;
+	if(args >= 2)
+	{
+		static char buffer[8];
+		GetCmdArg(2, buffer, sizeof(buffer));
+		cooldown = StringToInt(buffer);
+	}
+	if(args >= 3)
+	{
+		static char buffer[8];
+		GetCmdArg(3, buffer, sizeof(buffer));
+		mode = StringToInt(buffer);
+	}
+
 	int status;
 	if(!GetTrieValue(g_mapTrie, mapname, status))
 	{
@@ -309,7 +324,7 @@ public Action Command_AddExclude(int client, int args)
 	SetTrieValue(g_mapTrie, mapname, MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS);
 
 	// native call to mapchooser_extended
-	ExcludeMap(mapname);
+	ExcludeMap(mapname, cooldown, mode);
 
 	return Plugin_Handled;
 }
