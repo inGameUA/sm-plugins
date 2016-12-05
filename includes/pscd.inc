@@ -61,7 +61,7 @@ public Extension:__ext_PointDetour =
 };
 
 #if !defined REQUIRE_EXTENSIONS
-public __ext_dhooks_SetNTVOptional()
+public __ext_PointDetour_SetNTVOptional()
 {
 }
 #endif

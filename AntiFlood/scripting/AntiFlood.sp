@@ -14,7 +14,7 @@ public Plugin myinfo =
 	name = "AntiFlood",
 	author = "BotoX",
 	description = "",
-	version = "0.1",
+	version = "1.0",
 	url = ""
 };
 
