@@ -56,8 +56,8 @@ Handle g_Cvar_ExcludeCurrent = INVALID_HANDLE;
 
 Handle g_MapList = INVALID_HANDLE;
 Handle g_AdminMapList = INVALID_HANDLE;
-Handle g_MapMenu = INVALID_HANDLE;
-Handle g_AdminMapMenu = INVALID_HANDLE;
+Menu g_MapMenu;
+Menu g_AdminMapMenu;
 int g_mapFileSerial = -1;
 int g_AdminMapFileSerial = -1;
 
@@ -129,6 +129,7 @@ public void OnConfigsExecuted()
 			SetFailState("Unable to create a valid map list.");
 		}
 	}
+
 	if(ReadMapList(g_AdminMapList,
 					g_AdminMapFileSerial,
 					"sm_nominate_addmap menu",
@@ -155,8 +156,54 @@ public void OnConfigsExecuted()
 
 	g_NominationDelay = GetTime() + GetConVarInt(g_Cvar_InitialDelay);
 
-	BuildMapMenu();
-	BuildAdminMapMenu();
+	if(g_MapMenu != INVALID_HANDLE)
+		delete g_MapMenu;
+
+	g_MapMenu = BuildMapMenu("");
+
+	static char map[PLATFORM_MAX_PATH];
+	static char currentMap[PLATFORM_MAX_PATH];
+	ArrayList excludeMaps;
+
+	if(GetConVarBool(g_Cvar_ExcludeOld))
+	{
+		excludeMaps = CreateArray(ByteCountToCells(PLATFORM_MAX_PATH));
+		GetExcludeMapList(excludeMaps);
+	}
+
+	if(GetConVarBool(g_Cvar_ExcludeCurrent))
+		GetCurrentMap(currentMap, sizeof(currentMap));
+
+	ClearTrie(g_mapTrie);
+	for(int i = 0; i < GetArraySize(g_MapList); i++)
+	{
+		int status = MAPSTATUS_ENABLED;
+
+		GetArrayString(g_MapList, i, map, sizeof(map));
+
+		if(GetConVarBool(g_Cvar_ExcludeCurrent))
+		{
+			if(StrEqual(map, currentMap))
+				status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
+		}
+
+		/* Dont bother with this check if the current map check passed */
+		if(GetConVarBool(g_Cvar_ExcludeOld) && status == MAPSTATUS_ENABLED)
+		{
+			if(FindStringInArray(excludeMaps, map) != -1)
+				status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
+		}
+
+		SetTrieValue(g_mapTrie, map, status);
+	}
+
+	if(excludeMaps)
+		delete excludeMaps;
+
+	if(g_AdminMapMenu != INVALID_HANDLE)
+		delete g_AdminMapMenu;
+
+	g_AdminMapMenu = BuildAdminMapMenu("");
 }
 
 public void OnNominationRemoved(const char[] map, int owner)
@@ -194,6 +241,7 @@ public Action Command_Addmap(int client, int args)
 	if(!IsMapValid(mapname))
 	{
 		CReplyToCommand(client, "%t", "Map was not found", mapname);
+		AttemptAdminNominate(client, mapname);
 		return Plugin_Handled;
 	}
 
@@ -393,6 +441,7 @@ public Action Command_Nominate(int client, int args)
 	if(!GetTrieValue(g_mapTrie, mapname, status))
 	{
 		CPrintToChat(client, "%t", "Map was not found", mapname);
+		AttemptNominate(client, mapname);
 		return Plugin_Handled;
 	}
 
@@ -484,7 +533,7 @@ public Action Command_NominateList(int client, int args)
 	return Plugin_Handled;
 }
 
-public int Handler_NominateListMenu(Handle menu, MenuAction action, int param1, int param2)
+public int Handler_NominateListMenu(Menu menu, MenuAction action, int param1, int param2)
 {
 	switch(action)
 	{
@@ -497,86 +546,52 @@ public int Handler_NominateListMenu(Handle menu, MenuAction action, int param1, 
 	return 0;
 }
 
-void AttemptNominate(int client)
+void AttemptNominate(int client, const char[] filter = "")
 {
-	SetMenuTitle(g_MapMenu, "%T", "Nominate Title", client);
-	DisplayMenu(g_MapMenu, client, MENU_TIME_FOREVER);
+	Menu menu = g_MapMenu;
+	if(filter[0])
+		menu = BuildMapMenu(filter);
+
+	SetMenuTitle(menu, "%T", "Nominate Title", client);
+	DisplayMenu(menu, client, MENU_TIME_FOREVER);
 
 	return;
 }
 
-void AttemptAdminNominate(int client)
+void AttemptAdminNominate(int client, const char[] filter = "")
 {
-	SetMenuTitle(g_AdminMapMenu, "%T", "Nominate Title", client);
-	DisplayMenu(g_AdminMapMenu, client, MENU_TIME_FOREVER);
+	Menu menu = g_AdminMapMenu;
+	if(filter[0])
+		menu = BuildAdminMapMenu(filter);
+
+	SetMenuTitle(menu, "%T", "Nominate Title", client);
+	DisplayMenu(menu, client, MENU_TIME_FOREVER);
 
 	return;
 }
 
-void BuildMapMenu()
+Menu BuildMapMenu(const char[] filter)
 {
-	if(g_MapMenu != INVALID_HANDLE)
-	{
-		CloseHandle(g_MapMenu);
-		g_MapMenu = INVALID_HANDLE;
-	}
-
-	ClearTrie(g_mapTrie);
-
-	g_MapMenu = CreateMenu(Handler_MapSelectMenu, MENU_ACTIONS_DEFAULT|MenuAction_DrawItem|MenuAction_DisplayItem);
+	Menu menu = CreateMenu(Handler_MapSelectMenu, MENU_ACTIONS_DEFAULT|MenuAction_DrawItem|MenuAction_DisplayItem);
 
 	static char map[PLATFORM_MAX_PATH];
 
-	ArrayList excludeMaps;
-	static char currentMap[32];
-
-	if(GetConVarBool(g_Cvar_ExcludeOld))
-	{
-		excludeMaps = CreateArray(ByteCountToCells(PLATFORM_MAX_PATH));
-		GetExcludeMapList(excludeMaps);
-	}
-
-	if(GetConVarBool(g_Cvar_ExcludeCurrent))
-		GetCurrentMap(currentMap, sizeof(currentMap));
-
 	for(int i = 0; i < GetArraySize(g_MapList); i++)
 	{
-		int status = MAPSTATUS_ENABLED;
-
 		GetArrayString(g_MapList, i, map, sizeof(map));
 
-		if(GetConVarBool(g_Cvar_ExcludeCurrent))
-		{
-			if(StrEqual(map, currentMap))
-				status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
-		}
-
-		/* Dont bother with this check if the current map check passed */
-		if(GetConVarBool(g_Cvar_ExcludeOld) && status == MAPSTATUS_ENABLED)
-		{
-			if(FindStringInArray(excludeMaps, map) != -1)
-				status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
-		}
-
-		AddMenuItem(g_MapMenu, map, map);
-		SetTrieValue(g_mapTrie, map, status);
+		if(!filter[0] || StrContains(map, filter, false) != -1)
+			AddMenuItem(menu, map, map);
 	}
 
-	SetMenuExitButton(g_MapMenu, true);
+	SetMenuExitButton(menu, true);
 
-	if(excludeMaps)
-		delete excludeMaps;
+	return menu;
 }
 
-void BuildAdminMapMenu()
+Menu BuildAdminMapMenu(const char[] filter)
 {
-	if(g_AdminMapMenu != INVALID_HANDLE)
-	{
-		CloseHandle(g_AdminMapMenu);
-		g_AdminMapMenu = INVALID_HANDLE;
-	}
-
-	g_AdminMapMenu = CreateMenu(Handler_AdminMapSelectMenu, MENU_ACTIONS_DEFAULT|MenuAction_DrawItem|MenuAction_DisplayItem);
+	Menu menu = CreateMenu(Handler_AdminMapSelectMenu, MENU_ACTIONS_DEFAULT|MenuAction_DrawItem|MenuAction_DisplayItem);
 
 	static char map[PLATFORM_MAX_PATH];
 
@@ -584,16 +599,24 @@ void BuildAdminMapMenu()
 	{
 		GetArrayString(g_AdminMapList, i, map, sizeof(map));
 
-		AddMenuItem(g_AdminMapMenu, map, map);
+		if(!filter[0] || StrContains(map, filter, false) != -1)
+			AddMenuItem(menu, map, map);
 	}
 
-	SetMenuExitButton(g_AdminMapMenu, true);
+	SetMenuExitButton(menu, true);
+
+	return menu;
 }
 
-public int Handler_MapSelectMenu(Handle menu, MenuAction action, int param1, int param2)
+public int Handler_MapSelectMenu(Menu menu, MenuAction action, int param1, int param2)
 {
 	switch(action)
 	{
+		case MenuAction_End:
+		{
+			if(menu != g_MapMenu)
+				delete menu;
+		}
 		case MenuAction_Select:
 		{
 			if(g_Player_NominationDelay[param1] > GetTime())
@@ -770,10 +793,15 @@ stock bool IsNominateAllowed(int client)
 	return true;
 }
 
-public int Handler_AdminMapSelectMenu(Handle menu, MenuAction action, int param1, int param2)
+public int Handler_AdminMapSelectMenu(Menu menu, MenuAction action, int param1, int param2)
 {
 	switch(action)
 	{
+		case MenuAction_End:
+		{
+			if(menu != g_AdminMapMenu)
+				delete menu;
+		}
 		case MenuAction_Select:
 		{
 			static char map[PLATFORM_MAX_PATH];

@@ -41,10 +41,11 @@
 #include <colors>
 
 #pragma semicolon 1
+#pragma newdecls required
 
 #define MCE_VERSION "1.11.0"
 
-public Plugin:myinfo =
+public Plugin myinfo =
 {
 	name = "Rock The Vote Extended",
 	author = "Powerlord and AlliedModders LLC",
@@ -53,23 +54,24 @@ public Plugin:myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=156974"
 };
 
-new Handle:g_Cvar_Needed = INVALID_HANDLE;
-new Handle:g_Cvar_MinPlayers = INVALID_HANDLE;
-new Handle:g_Cvar_InitialDelay = INVALID_HANDLE;
-new Handle:g_Cvar_Interval = INVALID_HANDLE;
-new Handle:g_Cvar_ChangeTime = INVALID_HANDLE;
-new Handle:g_Cvar_RTVPostVoteAction = INVALID_HANDLE;
+Handle g_Cvar_Needed = INVALID_HANDLE;
+Handle g_Cvar_MinPlayers = INVALID_HANDLE;
+Handle g_Cvar_InitialDelay = INVALID_HANDLE;
+Handle g_Cvar_Interval = INVALID_HANDLE;
+Handle g_Cvar_ChangeTime = INVALID_HANDLE;
+Handle g_Cvar_RTVPostVoteAction = INVALID_HANDLE;
 
-new bool:g_CanRTV = false;		// True if RTV loaded maps and is active.
-new bool:g_RTVAllowed = false;	// True if RTV is available to players. Used to delay rtv votes.
-new g_Voters = 0;				// Total voters connected. Doesn't include fake clients.
-new g_Votes = 0;				// Total number of "say rtv" votes
-new g_VotesNeeded = 0;			// Necessary votes before map vote begins. (voters * percent_needed)
-new bool:g_Voted[MAXPLAYERS+1] = {false, ...};
+bool g_CanRTV = false;		// True if RTV loaded maps and is active.
+bool g_RTVAllowed = false;	// True if RTV is available to players. Used to delay rtv votes.
+int g_Voters = 0;				// Total voters connected. Doesn't include fake clients.
+int g_Votes = 0;				// Total number of "say rtv" votes
+int g_VotesNeeded = 0;			// Necessary votes before map vote begins. (voters * percent_needed)
+bool g_Voted[MAXPLAYERS+1] = {false, ...};
 
-new bool:g_InChange = false;
+bool g_InChange = false;
+bool g_bLate = false;
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 	LoadTranslations("rockthevote.phrases");
@@ -96,39 +98,43 @@ public OnPluginStart()
 	CreateConVar("rtve_version", MCE_VERSION, "Rock The Vote Extended Version", FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
 	AutoExecConfig(true, "rtv");
+
+	/* Handle late load */
+	g_bLate = true;
 }
 
-public OnMapStart()
+public void OnMapStart()
 {
 	g_Voters = 0;
 	g_Votes = 0;
 	g_VotesNeeded = 0;
 	g_InChange = false;
 
-	/* Handle late load */
-	for (new i=1; i<=MaxClients; i++)
+	if(g_bLate)
 	{
-		if (IsClientConnected(i))
+		for(int client = 1; client <= MaxClients; client++)
 		{
-			OnClientConnected(i);
+			if(IsClientConnected(client))
+				OnClientConnected(client);
 		}
+		g_bLate = false;
 	}
 }
 
-public OnMapEnd()
+public void OnMapEnd()
 {
 	g_CanRTV = false;
 	g_RTVAllowed = false;
 }
 
-public OnConfigsExecuted()
+public void OnConfigsExecuted()
 {
 	g_CanRTV = true;
 	g_RTVAllowed = false;
 	CreateTimer(GetConVarFloat(g_Cvar_InitialDelay), Timer_DelayRTV, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public OnClientConnected(client)
+public void OnClientConnected(int client)
 {
 	if(IsFakeClient(client))
 		return;
@@ -141,145 +147,117 @@ public OnClientConnected(client)
 	return;
 }
 
-public OnClientDisconnect(client)
+public void OnClientDisconnect(int client)
 {
 	if(IsFakeClient(client))
 		return;
 
 	if(g_Voted[client])
-	{
 		g_Votes--;
-	}
 
 	g_Voters = GetTeamClientCount(2) + GetTeamClientCount(3);
-
 	g_VotesNeeded = RoundToFloor(float(g_Voters) * GetConVarFloat(g_Cvar_Needed));
 
-	if (!g_CanRTV)
-	{
+	if(!g_CanRTV)
 		return;
-	}
 
-	if (g_Votes &&
+	if(g_Votes &&
 		g_Voters &&
 		g_Votes >= g_VotesNeeded &&
 		g_RTVAllowed )
 	{
-		if (GetConVarInt(g_Cvar_RTVPostVoteAction) == 1 && HasEndOfMapVoteFinished())
-		{
+		if(GetConVarInt(g_Cvar_RTVPostVoteAction) == 1 && HasEndOfMapVoteFinished())
 			return;
-		}
 
 		StartRTV();
 	}
 }
 
-public OnPlayerChangedTeam(Handle:event, const String:name[], bool:dontBroadcast)
+public void OnPlayerChangedTeam(Handle event, const char[] name, bool dontBroadcast)
 {
-	new Client = GetClientOfUserId(GetEventInt(event, "userid"));
-
-	if(IsFakeClient(Client))
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if(client == 0 || !IsClientConnected(client) || !IsClientInGame(client) || IsFakeClient(client) ||
+		GetClientTeam(client) == 0 || GetClientTeam(client) == 1)
 		return;
 
-	if(Client == 0)
+	g_Voters = GetTeamClientCount(2) + GetTeamClientCount(3);
+	g_VotesNeeded = RoundToFloor(float(g_Voters) * GetConVarFloat(g_Cvar_Needed));
+
+	if(g_Votes &&
+		g_Voters &&
+		g_Votes >= g_VotesNeeded &&
+		g_RTVAllowed )
 	{
-		return;
-	}
+		if(GetConVarInt(g_Cvar_RTVPostVoteAction) == 1 && HasEndOfMapVoteFinished())
+			return;
 
-	if (IsClientInGame(Client) && IsClientConnected(Client))
-	{
-		if (GetClientTeam(Client) == 1)
-		{
-			g_Voters = GetTeamClientCount(2) + GetTeamClientCount(3);
-			g_VotesNeeded = RoundToFloor(float(g_Voters) * GetConVarFloat(g_Cvar_Needed));
-
-			if (g_Votes &&
-				g_Voters &&
-				g_Votes >= g_VotesNeeded &&
-				g_RTVAllowed )
-			{
-				if (GetConVarInt(g_Cvar_RTVPostVoteAction) == 1 && HasEndOfMapVoteFinished())
-				{
-					return;
-				}
-
-				StartRTV();
-			}
-		}
+		StartRTV();
 	}
 }
 
-public Action:Command_RTV(client, args)
+public Action Command_RTV(int client, int args)
 {
-	if (!g_CanRTV || !client)
-	{
+	if(!g_CanRTV || !client)
 		return Plugin_Handled;
-	}
 
 	AttemptRTV(client);
 
 	return Plugin_Handled;
 }
 
-public Action:Command_Say(client, args)
+public Action Command_Say(int client, int args)
 {
-	if (!g_CanRTV || !client)
-	{
+	if(!g_CanRTV || !client)
 		return Plugin_Continue;
-	}
 
-	decl String:text[192];
-	if (!GetCmdArgString(text, sizeof(text)))
-	{
+	static char text[192];
+	if(!GetCmdArgString(text, sizeof(text)))
 		return Plugin_Continue;
-	}
 
-	new startidx = 0;
+	int startidx = 0;
 	if(text[strlen(text)-1] == '"')
 	{
 		text[strlen(text)-1] = '\0';
 		startidx = 1;
 	}
 
-	new ReplySource:old = SetCmdReplySource(SM_REPLY_TO_CHAT);
+	ReplySource old = SetCmdReplySource(SM_REPLY_TO_CHAT);
 
-	if (strcmp(text[startidx], "rtv", false) == 0 || strcmp(text[startidx], "rockthevote", false) == 0)
-	{
+	if(strcmp(text[startidx], "rtv", false) == 0 || strcmp(text[startidx], "rockthevote", false) == 0)
 		AttemptRTV(client);
-	}
 
 	SetCmdReplySource(old);
 
 	return Plugin_Continue;
 }
 
-AttemptRTV(client)
+void AttemptRTV(int client)
 {
-	if (!g_RTVAllowed  || (GetConVarInt(g_Cvar_RTVPostVoteAction) == 1 && HasEndOfMapVoteFinished()))
+	if(!g_RTVAllowed  || (GetConVarInt(g_Cvar_RTVPostVoteAction) == 1 && HasEndOfMapVoteFinished()))
 	{
 		CReplyToCommand(client, "[SM] %t", "RTV Not Allowed");
 		return;
 	}
 
-	if (!CanMapChooserStartVote())
+	if(!CanMapChooserStartVote())
 	{
 		CReplyToCommand(client, "[SM] %t", "RTV Started");
 		return;
 	}
 
-	if (GetClientCount(true) < GetConVarInt(g_Cvar_MinPlayers))
+	if(GetClientCount(true) < GetConVarInt(g_Cvar_MinPlayers))
 	{
 		CReplyToCommand(client, "[SM] %t", "Minimal Players Not Met");
 		return;
 	}
 
-	if (g_Voted[client])
+	if(g_Voted[client])
 	{
 		CReplyToCommand(client, "[SM] %t", "Already Voted", g_Votes, g_VotesNeeded);
 		return;
 	}
 
-	new String:name[MAX_NAME_LENGTH];
+	char name[MAX_NAME_LENGTH];
 	GetClientName(client, name, sizeof(name));
 
 	g_Votes++;
@@ -287,29 +265,25 @@ AttemptRTV(client)
 
 	CPrintToChatAll("[SM] %t", "RTV Requested", name, g_Votes, g_VotesNeeded);
 
-	if (g_Votes >= g_VotesNeeded)
-	{
+	if(g_Votes >= g_VotesNeeded)
 		StartRTV();
-	}
 }
 
-public Action:Timer_DelayRTV(Handle:timer)
+public Action Timer_DelayRTV(Handle timer)
 {
 	g_RTVAllowed = true;
 }
 
-StartRTV()
+void StartRTV()
 {
-	if (g_InChange)
-	{
+	if(g_InChange)
 		return;
-	}
 
-	if (EndOfMapVoteEnabled() && HasEndOfMapVoteFinished())
+	if(EndOfMapVoteEnabled() && HasEndOfMapVoteFinished())
 	{
 		/* Change right now then */
-		new String:map[PLATFORM_MAX_PATH];
-		if (GetNextMap(map, sizeof(map)))
+		char map[PLATFORM_MAX_PATH];
+		if(GetNextMap(map, sizeof(map)))
 		{
 			CPrintToChatAll("[SM] %t", "Changing Maps", map);
 			CreateTimer(5.0, Timer_ChangeMap, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -319,12 +293,13 @@ StartRTV()
 
 			g_RTVAllowed = false;
 		}
+
 		return;
 	}
 
-	if (CanMapChooserStartVote())
+	if(CanMapChooserStartVote())
 	{
-		new MapChange:when = MapChange:GetConVarInt(g_Cvar_ChangeTime);
+		MapChange when = view_as<MapChange>(GetConVarInt(g_Cvar_ChangeTime));
 		InitiateMapChooserVote(when);
 
 		ResetRTV();
@@ -334,39 +309,33 @@ StartRTV()
 	}
 }
 
-ResetRTV()
+void ResetRTV()
 {
 	g_Votes = 0;
 
-	for (new i=1; i<=MAXPLAYERS; i++)
-	{
+	for(int i = 1; i <= MAXPLAYERS; i++)
 		g_Voted[i] = false;
-	}
 }
 
-public Action:Timer_ChangeMap(Handle:hTimer)
+public Action Timer_ChangeMap(Handle hTimer)
 {
 	g_InChange = false;
 
 	LogMessage("RTV changing map manually");
 
-	new String:map[PLATFORM_MAX_PATH];
-	if (GetNextMap(map, sizeof(map)))
-	{
+	char map[PLATFORM_MAX_PATH];
+	if(GetNextMap(map, sizeof(map)))
 		ForceChangeLevel(map, "RTV after mapvote");
-	}
 
 	return Plugin_Stop;
 }
 
 // Rock The Vote Extended functions
 
-public Action:Command_ForceRTV(client, args)
+public Action Command_ForceRTV(int client, int args)
 {
-	if (!g_CanRTV || !client)
-	{
+	if(!g_CanRTV || !client)
 		return Plugin_Handled;
-	}
 
 	ShowActivity2(client, "[RTVE] ", "%t", "Initiated Vote Map");
 
@@ -374,5 +343,3 @@ public Action:Command_ForceRTV(client, args)
 
 	return Plugin_Handled;
 }
-
-
