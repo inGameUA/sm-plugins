@@ -88,7 +88,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		}
 	}
 
-	static char sSendBuffer[1024];
+	static char sSendBuffer[896];
 	int iBufLength = 0;
 
 #if defined _serverfps_included
@@ -103,23 +103,39 @@ public Action Command_Status(int client, const char[] command, int args)
 	iTickRate = iTickRate <= iServerTickRate ? iTickRate : iServerTickRate;
 #endif
 
-	Format(sSendBuffer, sizeof(sSendBuffer), "hostname: %s\n", sServerName);
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"hostname: %s\n", sServerName);
 
 #if defined _serverfps_included
-	Format(sSendBuffer, sizeof(sSendBuffer), "%stickrate : %.2f/%.2f (%d%%%%)\n", sSendBuffer, fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"tickrate : %.2f/%.2f (%d%%%%)\n", fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
 #else
-	Format(sSendBuffer, sizeof(sSendBuffer), "%stickrate : %d/%d (%d%%%%)\n", sSendBuffer, iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"tickrate : %d/%d (%d%%%%)\n", iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
 #endif
 
-	Format(sSendBuffer, sizeof(sSendBuffer), "%sudp/ip  : %s\n", sSendBuffer, sServerAdress);
-	Format(sSendBuffer, sizeof(sSendBuffer), "%snet I/O : %.2f/%.2f KiB/s (You: %.2f/%.2f KiB/s)\n", sSendBuffer, fServerDataIn / 1024, fServerDataOut / 1024, fClientDataIn / 1024, fClientDataOut / 1024);
-	Format(sSendBuffer, sizeof(sSendBuffer), "%smap      : %s at: %.0f x, %.0f y, %.0f z\n", sSendBuffer, sMapName, fPosition[0], fPosition[1], fPosition[2]);
-	Format(sSendBuffer, sizeof(sSendBuffer), "%stags      : %s\n", sSendBuffer, sServerTags);
-	Format(sSendBuffer, sizeof(sSendBuffer), "%sedicts : %d/%d/%d (used/max/free)\n", sSendBuffer, GetEntityCount(), GetMaxEntities(), GetMaxEntities() - GetEntityCount());
-	Format(sSendBuffer, sizeof(sSendBuffer), "%splayers : %d %s | %d %s (%d/%d)\n", sSendBuffer, iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
-	Format(sSendBuffer, sizeof(sSendBuffer), "%s# %8s %40s %24s %12s %4s %4s %s %s", sSendBuffer, "userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr");
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"udp/ip  : %s\n", sServerAdress);
 
-	g_hPlayerList[client] = CreateArray(ByteCountToCells(1024));
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"net I/O : %.2f/%.2f KiB/s (You: %.2f/%.2f KiB/s)\n", fServerDataIn / 1024, fServerDataOut / 1024, fClientDataIn / 1024, fClientDataOut / 1024);
+
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"map      : %s at: %.0f x, %.0f y, %.0f z\n", sMapName, fPosition[0], fPosition[1], fPosition[2]);
+
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"tags      : %s\n", sServerTags);
+
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"edicts : %d/%d/%d (used/max/free)\n", GetEntityCount(), GetMaxEntities(), GetMaxEntities() - GetEntityCount());
+
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"players : %d %s | %d %s (%d/%d)\n", iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
+
+	iBufLength += FormatEx(sSendBuffer[iBufLength], sizeof(sSendBuffer) - iBufLength,
+		"# %8s %40s %24s %12s %4s %4s %s %s", "userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr");
+
+	g_hPlayerList[client] = CreateArray(ByteCountToCells(sizeof(sSendBuffer)));
 
 	PushArrayString(g_hPlayerList[client], sSendBuffer);
 	g_bDataAvailable = true;
@@ -132,18 +148,18 @@ public Action Command_Status(int client, const char[] command, int args)
 
 		static char sPlayerID[8];
 		static char sPlayerName[MAX_NAME_LENGTH];
-		char sPlayerAuth[24];
+		static char sPlayerAuth[24];
 		char sPlayerTime[12];
 		char sPlayerPing[4];
 		char sPlayerLoss[4];
 		static char sPlayerState[16];
 		char sPlayerAddr[16];
 
-		Format(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
-		Format(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
+		FormatEx(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
+		FormatEx(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
 
 		if(!GetClientAuthId(player, AuthId_Steam2, sPlayerAuth, sizeof(sPlayerAuth)))
-			Format(sPlayerAuth, sizeof(sPlayerAuth), "STEAM_ID_PENDING");
+			FormatEx(sPlayerAuth, sizeof(sPlayerAuth), "STEAM_ID_PENDING");
 
 		if(!IsFakeClient(player))
 		{
@@ -152,28 +168,28 @@ public Action Command_Status(int client, const char[] command, int args)
 			int iSeconds = RoundToFloor((GetClientTime(player) - (iHours * 3600)) - (iMinutes * 60));
 
 			if (iHours)
-				Format(sPlayerTime, sizeof(sPlayerTime), "%d:%02d:%02d", iHours, iMinutes, iSeconds);
+				FormatEx(sPlayerTime, sizeof(sPlayerTime), "%d:%02d:%02d", iHours, iMinutes, iSeconds);
 			else
-				Format(sPlayerTime, sizeof(sPlayerTime), "%d:%02d", iMinutes, iSeconds);
+				FormatEx(sPlayerTime, sizeof(sPlayerTime), "%d:%02d", iMinutes, iSeconds);
 
-			Format(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(player, NetFlow_Outgoing) * 800));
-			Format(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
+			FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(player, NetFlow_Outgoing) * 800));
+			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
 		}
 
 		if(IsClientInGame(player))
-			Format(sPlayerState, sizeof(sPlayerState), "active");
+			FormatEx(sPlayerState, sizeof(sPlayerState), "active");
 		else
-			Format(sPlayerState, sizeof(sPlayerState), "spawning");
+			FormatEx(sPlayerState, sizeof(sPlayerState), "spawning");
 
 		if(GetAdminFlag(GetUserAdmin(client), Admin_Ban))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
 
 		static char sFormatted[128];
-		Format(sFormatted, sizeof(sFormatted), "# %8s %40s %24s %12s %4s %4s %s %s\n", sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, sPlayerAddr);
+		FormatEx(sFormatted, sizeof(sFormatted), "# %8s %40s %24s %12s %4s %4s %s %s\n", sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, sPlayerAddr);
 
 		int iFormattedLength = strlen(sFormatted);
 
-		if(iBufLength + iFormattedLength >= 1024)
+		if(iBufLength + iFormattedLength >= sizeof(sSendBuffer))
 		{
 			sSendBuffer[iBufLength - 1] = 0;
 			PushArrayString(g_hPlayerList[client], sSendBuffer);
@@ -228,7 +244,7 @@ public void OnGameFrame()
 			continue;
 		}
 
-		static char sBuffer[1024];
+		static char sBuffer[896];
 		GetArrayString(g_hPlayerList[client], 0, sBuffer, sizeof(sBuffer));
 		RemoveFromArray(g_hPlayerList[client], 0);
 
