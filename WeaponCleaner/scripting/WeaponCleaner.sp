@@ -24,7 +24,7 @@ public Plugin myinfo =
 	name 			= "WeaponCleaner",
 	author 			= "BotoX",
 	description 	= "Clean unneeded weapons",
-	version 		= "2.2",
+	version 		= "2.2.1",
 	url 			= ""
 };
 
@@ -134,7 +134,7 @@ public void OnEntityDestroyed(int entity)
 
 public void OnWeaponSpawned(int entity)
 {
-	SDKUnhook(entity, SDKHook_Spawn, OnWeaponSpawned);
+	//SDKUnhook(entity, SDKHook_Spawn, OnWeaponSpawned);
 
 	int HammerID = GetEntProp(entity, Prop_Data, "m_iHammerID");
 	// Should not be cleaned since it's a map spawned weapon
@@ -259,14 +259,9 @@ bool KillWeapon(int entref)
 	if(!IsValidEntity(entref))
 		return RemoveWeapon(entref);
 
-	// This implicitly calls OnEntityDestroyed() on success which calls RemoveWeapon()
 	AcceptEntityInput(entref, "Kill");
 
-	// Not successful?
-	if(IsValidEntity(entref))
-		return RemoveWeapon(entref);
-
-	return true;
+	return RemoveWeapon(entref);
 }
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
