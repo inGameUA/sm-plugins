@@ -1342,6 +1342,23 @@ public Query_UnBlockSelect(Handle:owner, Handle:hndl, const String:error[], any:
 		#endif
 
 		TempUnBlock(data); // Datapack closed inside.
+		
+		switch (type)
+		{
+			case TYPE_UNMUTE:
+			{
+				LogAction(admin, target, "\"%L\" temporary unmuted \"%L\" (reason \"%s\")", admin, target, reason);
+			}
+			case TYPE_UNGAG:
+			{
+				LogAction(admin, target, "\"%L\" temporary ungagged \"%L\" (reason \"%s\")", admin, target, reason);
+			}
+			case TYPE_UNSILENCE:
+			{
+				LogAction(admin, target, "\"%L\" temporary unsilenced \"%L\" (reason \"%s\")", admin, target, reason);
+			}
+		}
+		
 		return;
 	}
 	else
@@ -1473,12 +1490,14 @@ public Query_UnBlockSelect(Handle:owner, Handle:hndl, const String:error[], any:
 				{
 					WritePackCell(data, TYPE_UNMUTE);
 					TempUnBlock(data);
+					LogAction(admin, target, "\"%L\" temporary unmuted \"%L\" (reason \"%s\")", admin, target, reason);
 					data = INVALID_HANDLE;
 				}
 				else if (g_GagType[target] > bNot)
 				{
 					WritePackCell(data, TYPE_UNGAG);
 					TempUnBlock(data);
+					LogAction(admin, target, "\"%L\" temporary ungagged \"%L\" (reason \"%s\")", admin, target, reason);
 					data = INVALID_HANDLE;
 				}
 			}
@@ -2150,8 +2169,6 @@ stock CreateBlock(client, targetId = 0, length = -1, type, const String:sReason[
 					#endif
 
 					PerformMute(target, _, length, g_sName[client], adminAuth, admImmunity, reason);
-
-					LogAction(client, target, "\"%L\" muted \"%L\" (minutes \"%d\") (reason \"%s\")", client, target, length, reason);
 				}
 				else
 				{
@@ -2175,8 +2192,6 @@ stock CreateBlock(client, targetId = 0, length = -1, type, const String:sReason[
 					#endif
 
 					PerformGag(target, _, length, g_sName[client], adminAuth, admImmunity, reason);
-
-					LogAction(client, target, "\"%L\" gagged \"%L\" (minutes \"%d\") (reason \"%s\")", client, target, length, reason);
 				}
 				else
 				{
@@ -2201,8 +2216,6 @@ stock CreateBlock(client, targetId = 0, length = -1, type, const String:sReason[
 
 					PerformMute(target, _, length, g_sName[client], adminAuth, admImmunity, reason);
 					PerformGag(target, _, length, g_sName[client], adminAuth, admImmunity, reason);
-
-					LogAction(client, target, "\"%L\" silenced \"%L\" (minutes \"%d\") (reason \"%s\")", client, target, length, reason);
 				}
 				else
 				{
@@ -2219,9 +2232,43 @@ stock CreateBlock(client, targetId = 0, length = -1, type, const String:sReason[
 		}
 	}
 	if (target_count == 1 && !skipped)
+	{
+		switch (type)
+		{
+			case TYPE_MUTE:
+			{
+				LogAction(client, target_list[0], "\"%L\" muted \"%L\" (minutes \"%d\") (reason \"%s\")", client, target_list[0], length, reason);
+			}
+			case TYPE_GAG:
+			{
+				LogAction(client, target_list[0], "\"%L\" gagged \"%L\" (minutes \"%d\") (reason \"%s\")", client, target_list[0], length, reason);
+			}
+			case TYPE_SILENCE:
+			{
+				LogAction(client, target_list[0], "\"%L\" silenced \"%L\" (minutes \"%d\") (reason \"%s\")", client, target_list[0], length, reason);
+			}
+		}
 		SavePunishment(client, target_list[0], type, length, reason);
+	}
 	if (target_count > 1 || !skipped)
+	{
+		switch (type)
+		{
+			case TYPE_MUTE:
+			{
+				LogAction(client, -1, "\"%L\" muted \"%s\" (minutes \"%d\") (reason \"%s\")", client, target_name, length, reason);
+			}
+			case TYPE_GAG:
+			{
+				LogAction(client, -1, "\"%L\" gagged \"%s\" (minutes \"%d\") (reason \"%s\")", client, target_name, length, reason);
+			}
+			case TYPE_SILENCE:
+			{
+				LogAction(client, -1, "\"%L\" silenced \"%s\" (minutes \"%d\") (reason \"%s\")", client, target_name, length, reason);
+			}
+		}
 		ShowActivityToServer(client, type, length, reason, target_name, tn_is_ml);
+	}
 
 	return;
 }
@@ -2338,6 +2385,22 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 
 			TempUnBlock(dataPack);
 		}
+		
+		switch (type)
+		{
+			case TYPE_UNMUTE:
+			{
+				LogAction(client, -1, "\"%L\" temporary unmuted \"%s\" (reason \"%s\")", client, target_name, reason);
+			}
+			case TYPE_UNGAG:
+			{
+				LogAction(client, -1, "\"%L\" temporary ungagged \"%s\" (reason \"%s\")", client, target_name, reason);
+			}
+			case TYPE_UNSILENCE:
+			{
+				LogAction(client, -1, "\"%L\" temporary unsilenced \"%s\" (reason \"%s\")", client, target_name, reason);
+			}
+		}
 
 		#if defined DEBUG
 		PrintToServer("Showing activity to server in ProcessUnBlock for targets_count > 1");
@@ -2445,7 +2508,24 @@ stock ProcessUnBlock(client, targetId = 0, type, String:sReason[] = "", const St
 			#endif
 
 			if (TempUnBlock(dataPack))
+			{
+				switch (type)
+				{
+					case TYPE_UNMUTE:
+					{
+						LogAction(client, target, "\"%L\" temporary unmuted \"%L\" (reason \"%s\")", client, target, reason);
+					}
+					case TYPE_UNGAG:
+					{
+						LogAction(client, target, "\"%L\" temporary ungagged \"%L\" (reason \"%s\")", client, target, reason);
+					}
+					case TYPE_UNSILENCE:
+					{
+						LogAction(client, target, "\"%L\" temporary unsilenced \"%L\" (reason \"%s\")", client, target, reason);
+					}
+				}
 				ShowActivityToServer(client, type + TYPE_TEMP_SHIFT, _, _, g_sName[target], _);
+			}
 		}
 	}
 }
@@ -2517,20 +2597,17 @@ stock bool:TempUnBlock(Handle:data)
 			case TYPE_UNMUTE:
 			{
 				PerformUnMute(target);
-				LogAction(admin, target, "\"%L\" temporary unmuted \"%L\" (reason \"%s\")", admin, target, reason);
 			}
 			//-------------------------------------------------------------------------------------------------
 			case TYPE_UNGAG:
 			{
 				PerformUnGag(target);
-				LogAction(admin, target, "\"%L\" temporary ungagged \"%L\" (reason \"%s\")", admin, target, reason);
 			}
 			//-------------------------------------------------------------------------------------------------
 			case TYPE_UNSILENCE:
 			{
 				PerformUnMute(target);
 				PerformUnGag(target);
-				LogAction(admin, target, "\"%L\" temporary unsilenced \"%L\" (reason \"%s\")", admin, target, reason);
 			}
 			default:
 			{
