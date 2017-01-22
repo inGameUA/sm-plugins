@@ -53,8 +53,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_setscore", Command_SetScore, ADMFLAG_GENERIC, "sm_setscore <#userid|name> <value>");
 	RegAdminCmd("sm_setteamscore", Command_SetTeamScore, ADMFLAG_GENERIC, "sm_setteamscore <team> <value>");
 	RegAdminCmd("sm_waila", Command_WAILA, ADMFLAG_GENERIC);
-	RegAdminCmd("sm_getinfo", Command_WAILA, ADMFLAG_GENERIC);
-	RegAdminCmd("sm_getmodel", Command_WAILA, ADMFLAG_GENERIC);
+	RegAdminCmd("sm_info", Command_WAILA, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_fcvar", Command_ForceCVar, ADMFLAG_CHEATS, "sm_fcvar <#userid|name> <cvar> <value>");
 	RegAdminCmd("sm_setclantag", Command_SetClanTag, ADMFLAG_CHEATS, "sm_setclantag <#userid|name> [text]");
 	RegAdminCmd("sm_fakecommand", Command_FakeCommand, ADMFLAG_CHEATS, "sm_fakecommand <#userid|name> [command] [args]");
@@ -997,6 +996,7 @@ public Action Command_WAILA(int client, int argc)
 		char sModelPath[PLATFORM_MAX_PATH];
 		char sClsName[64];
 		char sNetClsName[64];
+		char sTargetname[64];
 		int iEntity;
 		int iEntityModelIdx;
 
@@ -1014,9 +1014,10 @@ public Action Command_WAILA(int client, int argc)
 		GetEntPropString(iEntity, Prop_Data, "m_ModelName", sModelPath, sizeof(sModelPath));
 		GetEntityClassname(iEntity, sClsName, sizeof(sClsName));
 		GetEntityNetClass(iEntity, sNetClsName, sizeof(sNetClsName));
+		GetEntPropString(iEntity, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
 		iEntityModelIdx = GetEntProp(iEntity, Prop_Send, "m_nModelIndex");
 
-		PrintToConsole(client, "Entity Index: %i\nModel Path: %s\nModel Index: %i\nClass Name: %s\nNet Class Name: %s", iEntity, sModelPath, iEntityModelIdx, sClsName, sNetClsName);
+		PrintToConsole(client, "Entity Index: %i\nTarget name: %s\nModel Path: %s\nModel Index: %i\nClass Name: %s\nNet Class Name: %s", iEntity, sTargetname, sModelPath, iEntityModelIdx, sClsName, sNetClsName);
 
 		PrintToChat(client, "[SM] Trace hit something, check your console for more information.");
 

@@ -11,7 +11,7 @@ public Plugin myinfo =
 	name		= "Spectate",
 	description	= "Adds a command to spectate specific players and removes broken spectate mode.",
 	author		= "Obus + BotoX",
-	version		= "1.0.1",
+	version		= "1.1",
 	url			= ""
 }
 
@@ -36,6 +36,8 @@ public void OnPluginStart()
 
 	RegConsoleCmd("sm_spectate", Command_Spectate, "Spectate a player.");
 	RegConsoleCmd("sm_spec", Command_Spectate, "Spectate a player.");
+
+	AddCommandListener(Command_GoTo, "spec_goto");
 }
 
 public void OnClientSettingsChanged(int client)
@@ -105,4 +107,26 @@ public Action Command_Spectate(int client, int argc)
 	PrintToChat(client, "\x01[SM] Spectating \x04%N\x01.", iTarget);
 
 	return Plugin_Handled;
+}
+
+// Fix spec_goto crash exploit
+public Action Command_GoTo(int client, const char[] command, int argc)
+{
+	if(argc == 5)
+	{
+		for(int i = 1; i <= 3; i++)
+		{
+			char sArg[64];
+			GetCmdArg(i, sArg, 64);
+			float fArg = StringToFloat(sArg);
+
+			if(FloatAbs(fArg) > 5000000000.0)
+			{
+				PrintToServer("%d -> %f > %f", i, FloatAbs(fArg), 5000000000.0);
+				return Plugin_Handled;
+			}
+		}
+	}
+
+	return Plugin_Continue;
 }

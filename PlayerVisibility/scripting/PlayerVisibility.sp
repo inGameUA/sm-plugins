@@ -98,6 +98,7 @@ public void OnPostThinkPost(int client)
 	}
 
 	if(GetEntityRenderMode(client) == RENDER_NONE ||
+		GetEntityRenderMode(client) == RENDER_ENVIRONMENTAL ||
 		GetEntityRenderFx(client) != RENDERFX_NONE)
 	{
 		g_Client_Alpha[client] = 0;
