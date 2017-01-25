@@ -31,7 +31,7 @@ public Plugin myinfo =
 	version 	= "2.1.0",
 	url 		= "https://github.com/CSSZombieEscape/sm-plugins/tree/master/ExtraCommands/"
 };
-
+ 
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
