@@ -33,6 +33,17 @@ public void OnPluginStart()
 	g_Cvar_HostTags = FindConVar("sv_tags");
 
 	AddCommandListener(Command_Status, "status");
+	RegConsoleCmd("sm_steamid", Command_SteamID);
+}
+
+public Action Command_SteamID(int client, int args)
+{      
+	char sAuthID[64];
+	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID));
+	{
+		PrintToChat(client, "\x01Hello \x03%N\x01, Your SteamID - \x04%s", client, sAuthID);
+	}
+	return Plugin_Handled;
 }
 
 public Action Command_Status(int client, const char[] command, int args)
